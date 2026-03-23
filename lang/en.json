@@ -1,0 +1,34 @@
+{
+  "souls-d20": {
+    "settings": {
+      "debugMode": {
+        "name": "Debug Mode",
+        "hint": "Enable verbose console logging for debugging"
+      }
+    },
+    "ui": {
+      "connectionStatus": {
+        "connected": "SD20 App Connected",
+        "disconnected": "SD20 App Disconnected"
+      },
+      "tokenLink": {
+        "title": "Link Token to Character",
+        "selectCharacter": "Select a character from SD20 App",
+        "noCharacters": "No characters available. Make sure SD20 App is open.",
+        "link": "Link",
+        "cancel": "Cancel"
+      },
+      "undo": {
+        "button": "Undo",
+        "success": "Action undone",
+        "noHistory": "No actions to undo"
+      }
+    },
+    "notifications": {
+      "appConnected": "SD20 App connected",
+      "appDisconnected": "SD20 App disconnected",
+      "tokenLinked": "Token linked to character: {name}",
+      "tokenUnlinked": "Token unlinked from character"
+    }
+  }
+}

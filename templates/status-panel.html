@@ -1,0 +1,347 @@
+<!-- Status Panel - Token buildup and conditions -->
+<div class="status-panel-content">
+
+  {{#unless hasData}}
+  <p class="status-panel-empty">No actor data available.</p>
+  {{else}}
+
+  <!-- Tabs -->
+  <nav class="status-panel-tabs">
+    <button class="sp-tab {{#if (eq activeTab 'buildup')}}active{{/if}}" data-action="switchTab" data-tab="buildup">
+      <i class="fa-solid fa-droplet"></i> Buildup
+    </button>
+    <button class="sp-tab {{#if (eq activeTab 'conditions')}}active{{/if}}" data-action="switchTab" data-tab="conditions">
+      <i class="fa-solid fa-bolt"></i> Conditions
+    </button>
+    <button class="sp-tab {{#if (eq activeTab 'vulnerabilities')}}active{{/if}}" data-action="switchTab" data-tab="vulnerabilities">
+      <i class="fa-solid fa-shield-xmark"></i> Vulns
+    </button>
+    <button class="sp-tab {{#if (eq activeTab 'protections')}}active{{/if}}" data-action="switchTab" data-tab="protections">
+      <i class="fa-solid fa-shield"></i> Prots
+    </button>
+  </nav>
+
+  <!-- Buildup Tab -->
+  <div class="sp-tab-body {{#unless (eq activeTab 'buildup')}}hidden{{/unless}}" data-tab-body="buildup">
+    {{#if showBuildupList}}
+    <div class="buildup-list">
+      {{#each buildup}}
+      <div class="buildup-row">
+        <span class="buildup-name">{{name}}</span>
+        <div class="buildup-values">
+          {{#if ../canEdit}}
+          <input type="number" class="buildup-input" data-effect="{{name}}" value="{{current}}" min="0" max="{{threshold}}" />
+          <span class="buildup-separator">/</span>
+          <span class="buildup-threshold">{{threshold}}</span>
+          {{else}}
+          <span class="buildup-current">{{current}}</span>
+          {{/if}}
+        </div>
+        {{#if ../canEdit}}
+        <div class="buildup-bar-container">
+          <div class="buildup-bar buildup-{{lowercase name}}" style="width: {{percent current threshold}}%"></div>
+        </div>
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" class="sp-reset-btn" data-action="resetBuildup" title="Reset all buildup to 0">
+      <i class="fa-solid fa-rotate-left"></i> Reset All
+    </button>
+    {{/if}}
+    {{else}}
+    <p class="sp-empty-message">No active buildup effects.</p>
+    {{/if}}
+  </div>
+
+  <!-- Conditions Tab -->
+  <div class="sp-tab-body {{#unless (eq activeTab 'conditions')}}hidden{{/unless}}" data-tab-body="conditions">
+    {{#if showConditionsList}}
+    <div class="conditions-list">
+      {{#each conditions}}
+      <div class="condition-row {{#if active}}active{{/if}}">
+        {{#if ../canEdit}}
+        <button type="button" class="condition-toggle" data-action="toggleCondition" data-condition="{{name}}" title="Toggle {{name}}">
+          <i class="fa-solid {{#if active}}fa-square-check{{else}}fa-square{{/if}}"></i>
+        </button>
+        {{else}}
+        <span class="condition-indicator">
+          <i class="fa-solid fa-circle"></i>
+        </span>
+        {{/if}}
+        <span class="condition-name">{{name}}</span>
+        {{#if active}}
+        {{#if showDuration}}
+        <div class="condition-duration">
+          {{#if ../canEdit}}
+          <input type="number" class="condition-duration-input" data-condition="{{name}}" value="{{duration}}" min="0" placeholder="∞" title="Rounds remaining (empty = indefinite)" />
+          {{else}}
+          <span class="condition-rounds">{{#if duration}}{{duration}}{{else}}∞{{/if}}</span>
+          {{/if}}
+          <span class="condition-duration-label">rds</span>
+        </div>
+        {{/if}}
+        {{#if showStacks}}
+        <div class="condition-stacks-wrapper">
+          <div class="condition-stacks">
+            <span class="condition-stacks-value">{{#if totalStacks}}{{totalStacks}}{{else}}0{{/if}}</span>
+            <span class="condition-stacks-label">stacks</span>
+          </div>
+          {{#if stackEntries.length}}
+          <button type="button" class="stacks-expand-btn" data-action="toggleStackDetails" data-condition="{{name}}" title="View stack details">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          {{/if}}
+        </div>
+        {{#if stackEntries.length}}
+        <div class="stacks-details-panel hidden" data-condition-details="{{name}}">
+          <div class="stacks-details-header">Stack Entries</div>
+          <div class="stacks-details-list">
+            {{#each stackEntries}}
+            <div class="stack-entry" data-entry-index="{{@index}}">
+              {{#if casterName}}<span class="stack-entry-source" title="{{casterName}}: {{sourceName}}">{{casterName}}</span>{{else}}{{#if sourceName}}<span class="stack-entry-source" title="Source: {{sourceName}}">{{sourceName}}</span>{{/if}}{{/if}}
+              {{#if ../../canEdit}}
+              <input type="number" class="stack-entry-stacks-input" data-condition="{{../name}}" data-entry-index="{{@index}}" data-field="stacks" value="{{stacks}}" min="1" title="Number of stacks" />
+              <span class="stack-entry-label">stacks</span>
+              <input type="number" class="stack-entry-duration-input" data-condition="{{../name}}" data-entry-index="{{@index}}" data-field="duration" value="{{remainingRounds}}" min="0" placeholder="∞" title="Rounds remaining (empty = indefinite)" />
+              <span class="stack-entry-label">rds</span>
+              <button type="button" class="stack-entry-remove" data-action="removeStackEntry" data-condition="{{../name}}" data-entry-index="{{@index}}" title="Remove this entry">
+                <i class="fa-solid fa-times"></i>
+              </button>
+              {{else}}
+              <span class="stack-entry-stacks">{{stacks}} stacks</span>
+              <span class="stack-entry-duration">{{#if remainingRounds}}{{remainingRounds}} rds{{else}}∞{{/if}}</span>
+              {{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+        {{/if}}
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" class="sp-reset-btn" data-action="resetConditions" title="Deactivate all conditions">
+      <i class="fa-solid fa-rotate-left"></i> Reset All
+    </button>
+    {{/if}}
+    {{else}}
+    <p class="sp-empty-message">No active conditions.</p>
+    {{/if}}
+  </div>
+
+  <!-- Vulnerabilities Tab -->
+  <div class="sp-tab-body {{#unless (eq activeTab 'vulnerabilities')}}hidden{{/unless}}" data-tab-body="vulnerabilities">
+    {{#if showVulnerabilitiesList}}
+    <div class="vulnerabilities-list">
+      {{#each vulnerabilities}}
+      <div class="vulnerability-row">
+        <span class="vulnerability-type" style="color: {{color}}">{{type}}</span>
+        <div class="vulnerability-totals">
+          <span class="vulnerability-tiers">-{{totalTiers}} tier{{#if (gt totalTiers 1)}}s{{/if}}</span>
+        </div>
+        {{#if entries.length}}
+        <button type="button" class="vuln-expand-btn" data-action="toggleVulnDetails" data-vuln-type="{{type}}" title="View vulnerability details">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+        {{/if}}
+      </div>
+      {{#if entries.length}}
+      <div class="vuln-details-panel hidden" data-vuln-details="{{type}}">
+        <div class="vuln-details-header">Sources</div>
+        <div class="vuln-details-list">
+          {{#each entries}}
+          <div class="vuln-entry" data-vuln-id="{{id}}">
+            <span class="vuln-entry-source" title="Applied by {{sourceActorId}}">{{sourceName}}</span>
+            {{#if ../../canEdit}}
+            <input type="number" class="vuln-entry-tiers-input" data-vuln-id="{{id}}" data-field="tiers" value="{{tiers}}" min="0" max="8" title="Resistance tier reduction" />
+            <span class="vuln-entry-label">tiers</span>
+            <input type="number" class="vuln-entry-duration-input" data-vuln-id="{{id}}" data-field="duration" value="{{duration}}" min="0" title="Rounds remaining" />
+            <span class="vuln-entry-label">rds</span>
+            <button type="button" class="vuln-entry-remove" data-action="removeVulnerability" data-vuln-id="{{id}}" title="Remove this vulnerability">
+              <i class="fa-solid fa-times"></i>
+            </button>
+            {{else}}
+            <span class="vuln-entry-tiers">-{{tiers}} tier{{#if (gt tiers 1)}}s{{/if}}</span>
+            <span class="vuln-entry-duration">{{duration}} rds</span>
+            {{/if}}
+          </div>
+          {{/each}}
+        </div>
+      </div>
+      {{/if}}
+      {{/each}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" class="sp-reset-btn" data-action="resetVulnerabilities" title="Remove all vulnerabilities">
+      <i class="fa-solid fa-rotate-left"></i> Reset All
+    </button>
+    {{/if}}
+    {{else}}
+    <p class="sp-empty-message">No active vulnerabilities.</p>
+    {{/if}}
+  </div>
+
+  <!-- Protections Tab (CF4) -->
+  <div class="sp-tab-body {{#unless (eq activeTab 'protections')}}hidden{{/unless}}" data-tab-body="protections">
+    {{#if showProtectionsList}}
+    <div class="protections-list">
+      <!-- Damage Protections -->
+      {{#if protections.damage.length}}
+      <div class="prot-section">
+        <div class="prot-section-header">Damage Protection</div>
+        {{#each protections.damage}}
+        <div class="protection-row">
+          <span class="protection-type" style="color: {{color}}">{{type}}</span>
+          <div class="protection-totals">
+            {{#if totalTiers}}<span class="protection-tiers">+{{totalTiers}} tier{{#if (gt totalTiers 1)}}s{{/if}}</span>{{/if}}
+            {{#if totalFlat}}<span class="protection-flat">+{{totalFlat}} flat</span>{{/if}}
+          </div>
+          {{#if entries.length}}
+          <button type="button" class="prot-expand-btn" data-action="toggleProtDetails" data-prot-key="damage-{{type}}" title="View protection details">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          {{/if}}
+        </div>
+        {{#if entries.length}}
+        <div class="prot-details-panel hidden" data-prot-details="damage-{{type}}">
+          <div class="prot-details-header">Sources</div>
+          <div class="prot-details-list">
+            {{#each entries}}
+            <div class="prot-entry" data-prot-id="{{id}}">
+              <span class="prot-entry-source" title="From {{sourceName}}">{{sourceName}}</span>
+              {{#if ../../../canEdit}}
+              <div class="prot-entry-fields">
+                {{#if tiers}}<input type="number" class="prot-entry-input" data-prot-id="{{id}}" data-prot-category="damage" data-field="tiers" value="{{tiers}}" min="0" title="Tiers" /><span class="prot-entry-label">T</span>{{/if}}
+                {{#if flat}}<input type="number" class="prot-entry-input" data-prot-id="{{id}}" data-prot-category="damage" data-field="flat" value="{{flat}}" min="0" title="Flat" /><span class="prot-entry-label">F</span>{{/if}}
+                {{#if diceCount}}<span class="prot-entry-dice">{{diceCount}}d{{diceSides}}</span>{{/if}}
+                {{#if percentage}}<span class="prot-entry-pct">{{percentage}}%</span>{{/if}}
+                <input type="number" class="prot-entry-input prot-duration" data-prot-id="{{id}}" data-prot-category="damage" data-field="remainingTurns" value="{{remainingTurns}}" min="0" placeholder="∞" title="Turns remaining" />
+                <span class="prot-entry-label">rds</span>
+                {{#if remainingAttacks}}<span class="prot-entry-attacks">{{remainingAttacks}} hits</span>{{/if}}
+                <button type="button" class="prot-entry-remove" data-action="removeProtection" data-prot-id="{{id}}" data-prot-category="damage" title="Remove this protection">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+              {{else}}
+              <span class="prot-entry-values">
+                {{#if tiers}}+{{tiers}}T {{/if}}{{#if flat}}+{{flat}}F {{/if}}{{#if diceCount}}{{diceCount}}d{{diceSides}} {{/if}}{{#if percentage}}{{percentage}}% {{/if}}
+              </span>
+              <span class="prot-entry-duration">{{#if remainingTurns}}{{remainingTurns}} rds{{else}}∞{{/if}}</span>
+              {{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <!-- Buildup Protections -->
+      {{#if protections.buildup.length}}
+      <div class="prot-section">
+        <div class="prot-section-header">Buildup Protection</div>
+        {{#each protections.buildup}}
+        <div class="protection-row">
+          <span class="protection-type" style="color: {{color}}">{{type}}</span>
+          <div class="protection-totals">
+            {{#if totalFlat}}<span class="protection-flat">+{{totalFlat}} flat</span>{{/if}}
+          </div>
+          {{#if entries.length}}
+          <button type="button" class="prot-expand-btn" data-action="toggleProtDetails" data-prot-key="buildup-{{type}}" title="View protection details">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          {{/if}}
+        </div>
+        {{#if entries.length}}
+        <div class="prot-details-panel hidden" data-prot-details="buildup-{{type}}">
+          <div class="prot-details-header">Sources</div>
+          <div class="prot-details-list">
+            {{#each entries}}
+            <div class="prot-entry" data-prot-id="{{id}}">
+              <span class="prot-entry-source" title="From {{sourceName}}">{{sourceName}}</span>
+              {{#if ../../../canEdit}}
+              <div class="prot-entry-fields">
+                {{#if flat}}<input type="number" class="prot-entry-input" data-prot-id="{{id}}" data-prot-category="buildup" data-field="flat" value="{{flat}}" min="0" title="Flat" /><span class="prot-entry-label">F</span>{{/if}}
+                {{#if diceCount}}<span class="prot-entry-dice">{{diceCount}}d{{diceSides}}</span>{{/if}}
+                {{#if percentage}}<span class="prot-entry-pct">{{percentage}}%</span>{{/if}}
+                <input type="number" class="prot-entry-input prot-duration" data-prot-id="{{id}}" data-prot-category="buildup" data-field="remainingTurns" value="{{remainingTurns}}" min="0" placeholder="∞" title="Turns remaining" />
+                <span class="prot-entry-label">rds</span>
+                {{#if remainingAttacks}}<span class="prot-entry-attacks">{{remainingAttacks}} hits</span>{{/if}}
+                <button type="button" class="prot-entry-remove" data-action="removeProtection" data-prot-id="{{id}}" data-prot-category="buildup" title="Remove this protection">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+              {{else}}
+              <span class="prot-entry-values">
+                {{#if flat}}+{{flat}}F {{/if}}{{#if diceCount}}{{diceCount}}d{{diceSides}} {{/if}}{{#if percentage}}{{percentage}}% {{/if}}
+              </span>
+              <span class="prot-entry-duration">{{#if remainingTurns}}{{remainingTurns}} rds{{else}}∞{{/if}}</span>
+              {{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <!-- Condition Immunities -->
+      {{#if protections.condition.length}}
+      <div class="prot-section">
+        <div class="prot-section-header">Condition Immunity</div>
+        {{#each protections.condition}}
+        <div class="protection-row">
+          <span class="protection-condition">{{condition}}</span>
+          {{#if entries.length}}
+          <button type="button" class="prot-expand-btn" data-action="toggleProtDetails" data-prot-key="condition-{{condition}}" title="View protection details">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          {{/if}}
+        </div>
+        {{#if entries.length}}
+        <div class="prot-details-panel hidden" data-prot-details="condition-{{condition}}">
+          <div class="prot-details-header">Sources</div>
+          <div class="prot-details-list">
+            {{#each entries}}
+            <div class="prot-entry" data-prot-id="{{id}}">
+              <span class="prot-entry-source" title="From {{sourceName}}">{{sourceName}}</span>
+              {{#if ../../../canEdit}}
+              <div class="prot-entry-fields">
+                <input type="number" class="prot-entry-input prot-duration" data-prot-id="{{id}}" data-prot-category="condition" data-field="remainingTurns" value="{{remainingTurns}}" min="0" placeholder="∞" title="Turns remaining" />
+                <span class="prot-entry-label">rds</span>
+                {{#if remainingAttacks}}<span class="prot-entry-attacks">{{remainingAttacks}} blocked</span>{{/if}}
+                <button type="button" class="prot-entry-remove" data-action="removeProtection" data-prot-id="{{id}}" data-prot-category="condition" title="Remove this protection">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+              {{else}}
+              <span class="prot-entry-duration">{{#if remainingTurns}}{{remainingTurns}} rds{{else}}∞{{/if}}</span>
+              {{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+        {{/each}}
+      </div>
+      {{/if}}
+    </div>
+    {{#if canEdit}}
+    <button type="button" class="sp-reset-btn" data-action="resetProtections" title="Remove all protections">
+      <i class="fa-solid fa-rotate-left"></i> Reset All
+    </button>
+    {{/if}}
+    {{else}}
+    <p class="sp-empty-message">No active protections.</p>
+    {{/if}}
+  </div>
+
+  {{/unless}}
+
+</div>

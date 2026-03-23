@@ -1,0 +1,104 @@
+{
+  "Actor": {
+    "types": ["character", "npc"],
+    "character": {
+      "hp": { "value": 0, "max": 0 },
+      "fp": { "value": 0, "max": 0 },
+      "ap": { "value": 8, "max": 8 },
+      "level": 0,
+      "characterUUID": "",
+      "stats": {
+        "vitality": { "value": 10, "mod": 0 },
+        "endurance": { "value": 10, "mod": 0 },
+        "strength": { "value": 10, "mod": 0 },
+        "dexterity": { "value": 10, "mod": 0 },
+        "attunement": { "value": 10, "mod": 0 },
+        "intelligence": { "value": 10, "mod": 0 },
+        "faith": { "value": 10, "mod": 0 }
+      },
+      "skills": {
+        "Athletics": 0,
+        "Acrobatics": 0,
+        "Perception": 0,
+        "FireKeeping": 0,
+        "Sanity": 0,
+        "Stealth": 0,
+        "Precision": 0,
+        "Diplomacy": 0
+      },
+      "knowledge": {
+        "Magics": 0,
+        "WorldHistory": 0,
+        "Monsters": 0,
+        "Cosmic": 0
+      },
+      "resistances": {
+        "PHYSICAL": { "type": "none", "value": 0 },
+        "MAGIC": { "type": "none", "value": 0 },
+        "FIRE": { "type": "none", "value": 0 },
+        "LIGHTNING": { "type": "none", "value": 0 },
+        "DARK": { "type": "none", "value": 0 }
+      },
+      "macroSets": null,
+      "toggledWeapons": []
+    },
+    "npc": {
+      "hp": { "value": 0, "max": 0 },
+      "fp": { "value": 0, "max": 0 },
+      "ap": { "value": 8, "max": 8 },
+      "level": 0,
+      "characterUUID": "",
+      "stats": {
+        "vitality": { "value": 10, "mod": 0 },
+        "endurance": { "value": 10, "mod": 0 },
+        "strength": { "value": 10, "mod": 0 },
+        "dexterity": { "value": 10, "mod": 0 },
+        "attunement": { "value": 10, "mod": 0 },
+        "intelligence": { "value": 10, "mod": 0 },
+        "faith": { "value": 10, "mod": 0 }
+      },
+      "skills": {
+        "Athletics": 0,
+        "Acrobatics": 0,
+        "Perception": 0,
+        "FireKeeping": 0,
+        "Sanity": 0,
+        "Stealth": 0,
+        "Precision": 0,
+        "Diplomacy": 0
+      },
+      "skillBonuses": {
+        "Athletics": 0,
+        "Acrobatics": 0,
+        "Perception": 0,
+        "FireKeeping": 0,
+        "Sanity": 0,
+        "Stealth": 0,
+        "Precision": 0,
+        "Diplomacy": 0
+      },
+      "knowledge": {
+        "Magics": 0,
+        "WorldHistory": 0,
+        "Monsters": 0,
+        "Cosmic": 0
+      },
+      "resistances": {
+        "PHYSICAL": 0,
+        "MAGIC": 0,
+        "FIRE": 0,
+        "LIGHTNING": 0,
+        "DARK": 0
+      },
+      "macroSets": null,
+      "toggledWeapons": [],
+      "cr": 0
+    }
+  },
+  "Item": {
+    "types": ["item"],
+    "item": {
+      "description": ""
+    }
+  }
+}

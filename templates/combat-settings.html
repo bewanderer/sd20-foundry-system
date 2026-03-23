@@ -1,0 +1,591 @@
+<!-- Combat Settings Modal — Per-actor immunities and overrides -->
+<div class="combat-settings-content">
+
+  {{!-- Warning for base actor editing (not shown for unlinked tokens) --}}
+  {{#unless isUnlinkedToken}}
+  {{#if isNPC}}
+  <div class="cs-base-actor-warning">
+    <i class="fa-solid fa-info-circle"></i>
+    Changes here set defaults for new tokens. Existing tokens on the board are not affected.
+  </div>
+  {{/if}}
+  {{/unless}}
+
+  <!-- Tabs -->
+  <nav class="combat-settings-tabs">
+    {{#if isNPC}}
+    <button class="cs-tab {{#if (eq activeTab 'resources')}}active{{/if}}" data-action="switchTab" data-tab="resources">
+      <i class="fa-solid fa-heart"></i> Resources
+    </button>
+    <button class="cs-tab {{#if (eq activeTab 'resistances')}}active{{/if}}" data-action="switchTab" data-tab="resistances">
+      <i class="fa-solid fa-shield-halved"></i> Resistances
+    </button>
+    {{/if}}
+    <button class="cs-tab {{#if (eq activeTab 'immunities')}}active{{/if}}" data-action="switchTab" data-tab="immunities">
+      <i class="fa-solid fa-shield"></i> Immunities
+    </button>
+    <button class="cs-tab {{#if (eq activeTab 'conditions')}}active{{/if}}" data-action="switchTab" data-tab="conditions">
+      <i class="fa-solid fa-ban"></i> Conditions
+    </button>
+    <button class="cs-tab {{#if (eq activeTab 'overrides')}}active{{/if}}" data-action="switchTab" data-tab="overrides">
+      <i class="fa-solid fa-sliders"></i> Overrides
+    </button>
+    <button class="cs-tab {{#if (eq activeTab 'recovery')}}active{{/if}}" data-action="switchTab" data-tab="recovery">
+      <i class="fa-solid fa-heart-pulse"></i> Recovery
+    </button>
+    <button class="cs-tab {{#if (eq activeTab 'tokenui')}}active{{/if}}" data-action="switchTab" data-tab="tokenui">
+      <i class="fa-solid fa-id-card"></i> Token UI
+    </button>
+    {{#if isNPC}}
+    <button class="cs-tab {{#if (eq activeTab 'behavior')}}active{{/if}}" data-action="switchTab" data-tab="behavior">
+      <i class="fa-solid fa-brain"></i> Behavior
+    </button>
+    {{/if}}
+  </nav>
+
+  <!-- Tab: Resources (NPC only) -->
+  {{#if isNPC}}
+  <div class="cs-tab-body {{#unless (eq activeTab 'resources')}}hidden{{/unless}}" data-tab-body="resources">
+
+    <fieldset class="cs-fieldset">
+      <legend>NPC Resources</legend>
+      <p class="cs-hint">Set max and current values for HP, FP, and AP. Changes save when you click Save.</p>
+
+      <div class="cs-npc-resources">
+        <div class="cs-npc-resource-row">
+          <span class="cs-resource-label hp">HP</span>
+          <div class="cs-resource-inputs">
+            <div class="cs-resource-input-group">
+              <label>Current</label>
+              <input type="number" name="npcResources.hp.value" value="{{actor.system.hp.value}}" min="0" />
+            </div>
+            <span class="cs-resource-separator">/</span>
+            <div class="cs-resource-input-group">
+              <label>Max</label>
+              <input type="number" name="npcResources.hp.max" value="{{actor.system.hp.max}}" min="1" />
+            </div>
+          </div>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar hp" style="width: {{hpPercent}}%"></div>
+            {{#if tempHP}}
+            <div class="cs-resource-bar temp-hp" style="width: {{tempHPPercent}}%; left: {{hpPercent}}%"></div>
+            {{/if}}
+          </div>
+        </div>
+
+        <div class="cs-npc-resource-row">
+          <span class="cs-resource-label fp">FP</span>
+          <div class="cs-resource-inputs">
+            <div class="cs-resource-input-group">
+              <label>Current</label>
+              <input type="number" name="npcResources.fp.value" value="{{actor.system.fp.value}}" min="0" />
+            </div>
+            <span class="cs-resource-separator">/</span>
+            <div class="cs-resource-input-group">
+              <label>Max</label>
+              <input type="number" name="npcResources.fp.max" value="{{actor.system.fp.max}}" min="1" />
+            </div>
+          </div>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar fp" style="width: {{fpPercent}}%"></div>
+          </div>
+        </div>
+
+        <div class="cs-npc-resource-row">
+          <span class="cs-resource-label ap">AP</span>
+          <div class="cs-resource-inputs">
+            <div class="cs-resource-input-group">
+              <label>Current</label>
+              <input type="number" name="npcResources.ap.value" value="{{actor.system.ap.value}}" min="0" />
+            </div>
+            <span class="cs-resource-separator">/</span>
+            <div class="cs-resource-input-group">
+              <label>Max</label>
+              <input type="number" name="npcResources.ap.max" value="{{actor.system.ap.max}}" min="1" />
+            </div>
+          </div>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar ap" style="width: {{apPercent}}%"></div>
+          </div>
+        </div>
+
+        <div class="cs-npc-resource-row">
+          <span class="cs-resource-label temp-hp">Temp HP</span>
+          <div class="cs-resource-inputs">
+            <div class="cs-resource-input-group">
+              <label>Current</label>
+              <input type="number" name="npcResources.hp.temp" value="{{actor.system.hp.temp}}" min="0" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Stats</legend>
+      <p class="cs-hint">Base stats determine stat modifiers. Mod = floor((stat - 10) / 2)</p>
+      <div class="cs-stats-grid">
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Vitality</span>
+          <input type="number" name="npcStat.vitality" value="{{npcStats.vitality}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.vitality 0)}}negative{{/if}}">{{#if (gte npcStatMods.vitality 0)}}+{{/if}}{{npcStatMods.vitality}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Endurance</span>
+          <input type="number" name="npcStat.endurance" value="{{npcStats.endurance}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.endurance 0)}}negative{{/if}}">{{#if (gte npcStatMods.endurance 0)}}+{{/if}}{{npcStatMods.endurance}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Strength</span>
+          <input type="number" name="npcStat.strength" value="{{npcStats.strength}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.strength 0)}}negative{{/if}}">{{#if (gte npcStatMods.strength 0)}}+{{/if}}{{npcStatMods.strength}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Dexterity</span>
+          <input type="number" name="npcStat.dexterity" value="{{npcStats.dexterity}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.dexterity 0)}}negative{{/if}}">{{#if (gte npcStatMods.dexterity 0)}}+{{/if}}{{npcStatMods.dexterity}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Attunement</span>
+          <input type="number" name="npcStat.attunement" value="{{npcStats.attunement}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.attunement 0)}}negative{{/if}}">{{#if (gte npcStatMods.attunement 0)}}+{{/if}}{{npcStatMods.attunement}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Intelligence</span>
+          <input type="number" name="npcStat.intelligence" value="{{npcStats.intelligence}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.intelligence 0)}}negative{{/if}}">{{#if (gte npcStatMods.intelligence 0)}}+{{/if}}{{npcStatMods.intelligence}}</span>
+        </div>
+        <div class="cs-stat-row">
+          <span class="cs-stat-label">Faith</span>
+          <input type="number" name="npcStat.faith" value="{{npcStats.faith}}" min="1" class="cs-stat-input" />
+          <span class="cs-stat-mod {{#if (lt npcStatMods.faith 0)}}negative{{/if}}">{{#if (gte npcStatMods.faith 0)}}+{{/if}}{{npcStatMods.faith}}</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Skills</legend>
+      <p class="cs-hint">Skills are computed from stat mods + flat bonus. Total shown in parentheses.</p>
+      <div class="cs-skills-grid">
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Athletics</span>
+          <span class="cs-skill-formula">Str + End</span>
+          <input type="number" name="npcSkillBonus.Athletics" value="{{npcSkillBonuses.Athletics}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Athletics}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Acrobatics</span>
+          <span class="cs-skill-formula">Dex + End</span>
+          <input type="number" name="npcSkillBonus.Acrobatics" value="{{npcSkillBonuses.Acrobatics}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Acrobatics}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Perception</span>
+          <span class="cs-skill-formula">Int + End</span>
+          <input type="number" name="npcSkillBonus.Perception" value="{{npcSkillBonuses.Perception}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Perception}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">FireKeeping</span>
+          <span class="cs-skill-formula">Fai + End</span>
+          <input type="number" name="npcSkillBonus.FireKeeping" value="{{npcSkillBonuses.FireKeeping}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.FireKeeping}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Sanity</span>
+          <span class="cs-skill-formula">Str + Att</span>
+          <input type="number" name="npcSkillBonus.Sanity" value="{{npcSkillBonuses.Sanity}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Sanity}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Stealth</span>
+          <span class="cs-skill-formula">Dex + Att</span>
+          <input type="number" name="npcSkillBonus.Stealth" value="{{npcSkillBonuses.Stealth}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Stealth}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Precision</span>
+          <span class="cs-skill-formula">Int + Att</span>
+          <input type="number" name="npcSkillBonus.Precision" value="{{npcSkillBonuses.Precision}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Precision}})</span>
+        </div>
+        <div class="cs-skill-row">
+          <span class="cs-skill-label">Diplomacy</span>
+          <span class="cs-skill-formula">Fai + Att</span>
+          <input type="number" name="npcSkillBonus.Diplomacy" value="{{npcSkillBonuses.Diplomacy}}" class="cs-skill-bonus-input" placeholder="Bonus" />
+          <span class="cs-skill-total">({{npcSkills.Diplomacy}})</span>
+        </div>
+      </div>
+    </fieldset>
+
+  </div>
+  {{/if}}
+
+  <!-- Tab: Resistances (NPC only) -->
+  {{#if isNPC}}
+  <div class="cs-tab-body {{#unless (eq activeTab 'resistances')}}hidden{{/unless}}" data-tab-body="resistances">
+
+    <fieldset class="cs-fieldset">
+      <legend>Damage Resistance Tiers</legend>
+      <p class="cs-hint">Each tier = 25% damage reduction. Negative tiers increase damage taken. Range: {{resistanceTierMin}} to {{resistanceTierMax}}.</p>
+      <div class="cs-resistance-grid">
+        {{#each damageTypes}}
+        <div class="cs-resistance-row">
+          <span class="cs-damage-label" style="color: {{lookup ../damageColors this}}">{{this}}</span>
+          <input type="number" name="npcResistance.{{this}}" value="{{lookup ../npcResistances this}}" min="{{../resistanceTierMin}}" max="{{../resistanceTierMax}}" class="cs-tier-input" />
+        </div>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Resistance Reference</legend>
+      <div class="cs-reference">
+        <div class="cs-reference-row">
+          <span>Tier 4:</span><span>100% reduction (immune)</span>
+        </div>
+        <div class="cs-reference-row">
+          <span>Tier 5+:</span><span>Healing instead of damage</span>
+        </div>
+        <div class="cs-reference-row">
+          <span>Tier -1:</span><span>25% MORE damage</span>
+        </div>
+        <div class="cs-reference-row">
+          <span>Tier -4:</span><span>100% MORE damage (2x)</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Status Thresholds</legend>
+      <p class="cs-hint">Buildup triggers when it reaches this threshold. Higher = more resistant.</p>
+      <div class="cs-threshold-grid">
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Bleed</span>
+          <input type="number" name="npcThreshold.Bleed" value="{{npcStatusThresholds.Bleed}}" min="1" class="cs-threshold-input" />
+        </div>
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Poison</span>
+          <input type="number" name="npcThreshold.Poison" value="{{npcStatusThresholds.Poison}}" min="1" class="cs-threshold-input" />
+        </div>
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Toxic</span>
+          <input type="number" name="npcThreshold.Toxic" value="{{npcStatusThresholds.Toxic}}" min="1" class="cs-threshold-input" />
+        </div>
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Frost</span>
+          <input type="number" name="npcThreshold.Frost" value="{{npcStatusThresholds.Frost}}" min="1" class="cs-threshold-input" />
+        </div>
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Curse</span>
+          <input type="number" name="npcThreshold.Curse" value="{{npcStatusThresholds.Curse}}" min="1" class="cs-threshold-input" />
+        </div>
+        <div class="cs-threshold-row">
+          <span class="cs-threshold-label">Poise</span>
+          <input type="number" name="npcThreshold.Poise" value="{{npcStatusThresholds.Poise}}" min="1" class="cs-threshold-input" />
+        </div>
+      </div>
+    </fieldset>
+  </div>
+  {{/if}}
+
+  <!-- Tab: Immunities (damage + status effect) -->
+  <div class="cs-tab-body {{#unless (eq activeTab 'immunities')}}hidden{{/unless}}" data-tab-body="immunities">
+
+    <fieldset class="cs-fieldset">
+      <legend>Damage Immunities</legend>
+      <p class="cs-hint">Immune targets take 0 damage of that type. TRUE damage cannot be made immune.</p>
+      <div class="cs-checkbox-grid">
+        {{#each damageTypes}}
+        <label class="cs-checkbox">
+          <input type="checkbox" name="damageImmunities.{{this}}" {{#if (lookup ../settings.damageImmunities this)}}checked{{/if}} />
+          <span class="cs-damage-label" style="color: {{lookup ../damageColors this}}">{{this}}</span>
+        </label>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Status Effect Immunities</legend>
+      <p class="cs-hint">Immune targets ignore all buildup for that effect.</p>
+      <div class="cs-checkbox-grid">
+        {{#each statusEffects}}
+        <label class="cs-checkbox">
+          <input type="checkbox" name="statusEffectImmunities.{{this}}" {{#if (lookup ../settings.statusEffectImmunities this)}}checked{{/if}} />
+          <span>{{this}}</span>
+        </label>
+        {{/each}}
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- Tab: Condition Immunities -->
+  <div class="cs-tab-body {{#unless (eq activeTab 'conditions')}}hidden{{/unless}}" data-tab-body="conditions">
+
+    <fieldset class="cs-fieldset">
+      <legend>Status Condition Immunities</legend>
+      <p class="cs-hint">Immune targets cannot receive these conditions.</p>
+      <div class="cs-checkbox-grid cs-checkbox-grid-wide">
+        {{#each statusConditions}}
+        <label class="cs-checkbox">
+          <input type="checkbox" name="statusConditionImmunities.{{this}}" {{#if (lookup ../settings.statusConditionImmunities this)}}checked{{/if}} />
+          <span>{{this}}</span>
+        </label>
+        {{/each}}
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- Tab: Combat Overrides -->
+  <div class="cs-tab-body {{#unless (eq activeTab 'overrides')}}hidden{{/unless}}" data-tab-body="overrides">
+
+    <fieldset class="cs-fieldset">
+      <legend>Damage Reduction Overrides</legend>
+      {{#if isNPC}}
+      <p class="cs-hint">Applied after resistance tiers. Flat reduction subtracted from incoming damage.</p>
+      {{else}}
+      <p class="cs-hint">Applied after App resistances. Percentage reduction first, then flat reduction.</p>
+      {{/if}}
+      <div class="cs-override-table {{#if isNPC}}cs-override-table-npc{{/if}}">
+        <div class="cs-override-header">
+          <span>Type</span><span>Flat</span>{{#unless isNPC}}<span>%</span>{{/unless}}
+        </div>
+        {{#each damageTypes}}
+        <div class="cs-override-row">
+          <span class="cs-damage-label" style="color: {{lookup ../damageColors this}}">{{this}}</span>
+          <input type="number" name="overrides.damage.{{this}}.flatReduction" value="{{lookup (lookup ../settings.overrides.damage this) 'flatReduction'}}" min="0" />
+          {{#unless ../isNPC}}
+          <input type="number" name="overrides.damage.{{this}}.percentReduction" value="{{lookup (lookup ../settings.overrides.damage this) 'percentReduction'}}" min="0" max="100" />
+          {{/unless}}
+        </div>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Status Buildup Reduction Overrides</legend>
+      <div class="cs-override-table">
+        <div class="cs-override-header">
+          <span>Effect</span><span>Flat</span><span>%</span>
+        </div>
+        {{#each statusEffects}}
+        <div class="cs-override-row">
+          <span>{{this}}</span>
+          <input type="number" name="overrides.statusBuildup.{{this}}.flatReduction" value="{{lookup (lookup ../settings.overrides.statusBuildup this) 'flatReduction'}}" min="0" />
+          <input type="number" name="overrides.statusBuildup.{{this}}.percentReduction" value="{{lookup (lookup ../settings.overrides.statusBuildup this) 'percentReduction'}}" min="0" max="100" />
+        </div>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Healing Overrides</legend>
+      <p class="cs-hint">Modifies incoming healing from spells and abilities. Flat bonus adds to healing received, percent modifier adjusts total (e.g., -50 = half healing).</p>
+      <div class="cs-override-table cs-override-table-healing">
+        <div class="cs-override-row">
+          <span>Flat Bonus to Healing</span>
+          <input type="number" name="overrides.healing.flatBonus" value="{{settings.overrides.healing.flatBonus}}" />
+        </div>
+        <div class="cs-override-row">
+          <span>Percent Modifier (%)</span>
+          <input type="number" name="overrides.healing.percentModifier" value="{{settings.overrides.healing.percentModifier}}" />
+        </div>
+        <div class="cs-override-row">
+          <label class="cs-checkbox">
+            <input type="checkbox" name="overrides.healing.invertHealing" {{#if settings.overrides.healing.invertHealing}}checked{{/if}} />
+            <span>Invert Healing (healing becomes damage instead)</span>
+          </label>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- Tab: Status Buildup Recovery -->
+  <div class="cs-tab-body {{#unless (eq activeTab 'recovery')}}hidden{{/unless}}" data-tab-body="recovery">
+
+    <fieldset class="cs-fieldset">
+      <legend>Passive Recovery (per Round)</legend>
+      <p class="cs-hint">Flat HP/FP recovered at the start of each round through the normal recovery flow.</p>
+      <div class="cs-override-table cs-override-table-healing">
+        <div class="cs-override-row">
+          <span>HP Recovery per Round</span>
+          <input type="number" name="overrides.passiveRecovery.hpPerRound" value="{{settings.overrides.passiveRecovery.hpPerRound}}" min="0" />
+        </div>
+        <div class="cs-override-row">
+          <span>FP Recovery per Round</span>
+          <input type="number" name="overrides.passiveRecovery.fpPerRound" value="{{settings.overrides.passiveRecovery.fpPerRound}}" min="0" />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Self Buildup Recovery</legend>
+      <p class="cs-hint">All creatures recover 1 buildup per round by default (except Poise). This adds a flat bonus to that recovery. E.g., setting this to +1 means you recover 2 buildup per round instead of 1.</p>
+      <div class="cs-override-table cs-override-table-healing">
+        <div class="cs-override-row">
+          <span>Bonus Recovery per Round</span>
+          <input type="number" name="overrides.statusRecovery.selfRecoveryBonus" value="{{settings.overrides.statusRecovery.selfRecoveryBonus}}" min="0" />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Aura: Prevent Buildup Recovery</legend>
+      <p class="cs-hint">Prevents nearby actors from recovering the selected status buildups.</p>
+      <div class="cs-override-table cs-override-table-healing">
+        <div class="cs-override-row">
+          <span>Aura Radius (hexes)</span>
+          <input type="number" name="overrides.statusRecovery.preventRecoveryRadius" value="{{settings.overrides.statusRecovery.preventRecoveryRadius}}" min="0" />
+        </div>
+        <div class="cs-override-row cs-override-row-multiselect">
+          <span>Affects</span>
+          <div class="cs-checkbox-grid cs-checkbox-grid-statuses">
+            <label class="cs-checkbox">
+              <input type="checkbox" name="overrides.statusRecovery.preventRecoveryTargets.all" {{#if settings.overrides.statusRecovery.preventRecoveryTargets.all}}checked{{/if}} />
+              <span>All</span>
+            </label>
+            {{#each statusEffects}}
+            <label class="cs-checkbox">
+              <input type="checkbox" name="overrides.statusRecovery.preventRecoveryTargets.{{this}}" {{#if (lookup ../settings.overrides.statusRecovery.preventRecoveryTargets this)}}checked{{/if}} />
+              <span>{{this}}</span>
+            </label>
+            {{/each}}
+          </div>
+        </div>
+        <div class="cs-override-row">
+          <label class="cs-checkbox">
+            <input type="checkbox" name="overrides.statusRecovery.preventRecoveryExcludeSelf" {{#if settings.overrides.statusRecovery.preventRecoveryExcludeSelf}}checked{{/if}} />
+            <span>Exclude self from aura effect</span>
+          </label>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cs-fieldset">
+      <legend>Aura: Boost Buildup Recovery</legend>
+      <p class="cs-hint">Increases the amount of status buildup recovery for nearby actors on selected statuses.</p>
+      <div class="cs-override-table cs-override-table-healing">
+        <div class="cs-override-row">
+          <span>Aura Radius (hexes)</span>
+          <input type="number" name="overrides.statusRecovery.increaseRecoveryRadius" value="{{settings.overrides.statusRecovery.increaseRecoveryRadius}}" min="0" />
+        </div>
+        <div class="cs-override-row">
+          <span>Bonus Recovery Amount</span>
+          <input type="number" name="overrides.statusRecovery.increaseRecoveryAmount" value="{{settings.overrides.statusRecovery.increaseRecoveryAmount}}" min="0" />
+        </div>
+        <div class="cs-override-row cs-override-row-multiselect">
+          <span>Affects</span>
+          <div class="cs-checkbox-grid cs-checkbox-grid-statuses">
+            <label class="cs-checkbox">
+              <input type="checkbox" name="overrides.statusRecovery.increaseRecoveryTargets.all" {{#if settings.overrides.statusRecovery.increaseRecoveryTargets.all}}checked{{/if}} />
+              <span>All</span>
+            </label>
+            {{#each statusEffects}}
+            <label class="cs-checkbox">
+              <input type="checkbox" name="overrides.statusRecovery.increaseRecoveryTargets.{{this}}" {{#if (lookup ../settings.overrides.statusRecovery.increaseRecoveryTargets this)}}checked{{/if}} />
+              <span>{{this}}</span>
+            </label>
+            {{/each}}
+          </div>
+        </div>
+        <div class="cs-override-row">
+          <label class="cs-checkbox">
+            <input type="checkbox" name="overrides.statusRecovery.increaseRecoveryExcludeSelf" {{#if settings.overrides.statusRecovery.increaseRecoveryExcludeSelf}}checked{{/if}} />
+            <span>Exclude self from aura effect</span>
+          </label>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- Tab: Token UI -->
+  <div class="cs-tab-body {{#unless (eq activeTab 'tokenui')}}hidden{{/unless}}" data-tab-body="tokenui">
+
+    <fieldset class="cs-fieldset">
+      <legend>Token Bar Visibility</legend>
+      <p class="cs-hint">Control which resource bars are visible on the token. GM always sees all bars.</p>
+      <div class="cs-visibility-grid">
+        <div class="cs-visibility-header">
+          <span></span>
+          <span>Show to Self</span>
+          <span>Show to Others</span>
+        </div>
+        <div class="cs-visibility-row">
+          <span class="cs-resource-label hp">HP Bar</span>
+          <input type="checkbox" name="tokenUI.hp.showToSelf" {{#if settings.tokenUI.hp.showToSelf}}checked{{/if}} />
+          <input type="checkbox" name="tokenUI.hp.showToOthers" {{#if settings.tokenUI.hp.showToOthers}}checked{{/if}} />
+        </div>
+        <div class="cs-visibility-row">
+          <span class="cs-resource-label fp">FP Bar</span>
+          <input type="checkbox" name="tokenUI.fp.showToSelf" {{#if settings.tokenUI.fp.showToSelf}}checked{{/if}} />
+          <input type="checkbox" name="tokenUI.fp.showToOthers" {{#if settings.tokenUI.fp.showToOthers}}checked{{/if}} />
+        </div>
+        <div class="cs-visibility-row">
+          <span class="cs-resource-label ap">AP Bar</span>
+          <input type="checkbox" name="tokenUI.ap.showToSelf" {{#if settings.tokenUI.ap.showToSelf}}checked{{/if}} />
+          <input type="checkbox" name="tokenUI.ap.showToOthers" {{#if settings.tokenUI.ap.showToOthers}}checked{{/if}} />
+        </div>
+      </div>
+    </fieldset>
+
+    {{!-- Current Resources and Temp HP only shown for players (NPCs have these in Resources tab) --}}
+    {{#unless isNPC}}
+    <fieldset class="cs-fieldset">
+      <legend>Current Resources</legend>
+      <p class="cs-hint">Edit current HP/FP/AP values. Changes save immediately to the actor.</p>
+      <div class="cs-resource-bars">
+        <div class="cs-resource-row">
+          <span class="cs-resource-label hp">HP</span>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar hp" style="width: {{hpPercent}}%"></div>
+            {{#if tempHP}}
+            <div class="cs-resource-bar temp-hp" style="width: {{tempHPPercent}}%; left: {{hpPercent}}%"></div>
+            {{/if}}
+          </div>
+          <input type="number" class="cs-resource-input" data-resource="hp" value="{{actor.system.hp.value}}" min="0" max="{{actor.system.hp.max}}" />
+          <span class="cs-resource-max">/ {{actor.system.hp.max}}</span>
+        </div>
+        <div class="cs-resource-row">
+          <span class="cs-resource-label fp">FP</span>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar fp" style="width: {{fpPercent}}%"></div>
+          </div>
+          <input type="number" class="cs-resource-input" data-resource="fp" value="{{actor.system.fp.value}}" min="0" max="{{actor.system.fp.max}}" />
+          <span class="cs-resource-max">/ {{actor.system.fp.max}}</span>
+        </div>
+        <div class="cs-resource-row">
+          <span class="cs-resource-label ap">AP</span>
+          <div class="cs-resource-bar-container">
+            <div class="cs-resource-bar ap" style="width: {{apPercent}}%"></div>
+          </div>
+          <input type="number" class="cs-resource-input" data-resource="ap" value="{{actor.system.ap.value}}" min="0" max="{{actor.system.ap.max}}" />
+          <span class="cs-resource-max">/ {{actor.system.ap.max}}</span>
+        </div>
+      </div>
+    </fieldset>
+    {{/unless}}
+  </div>
+
+  <!-- Tab: Behavior Notes (NPC only) -->
+  {{#if isNPC}}
+  <div class="cs-tab-body {{#unless (eq activeTab 'behavior')}}hidden{{/unless}}" data-tab-body="behavior">
+
+    <fieldset class="cs-fieldset cs-fieldset-full">
+      <legend>Behavior Notes</legend>
+      <p class="cs-hint">Notes on this creature's combat behavior, tactics, and patterns. Only visible to the token owner and GM.</p>
+      <textarea name="behaviorNotes" class="cs-behavior-notes" placeholder="Enter behavior notes for this creature...&#10;&#10;Example:&#10;- Phase 1 (100-50% HP): Uses basic attacks&#10;- Phase 2 (50-25% HP): Becomes aggressive, uses special abilities&#10;- Phase 3 (<25% HP): Desperate, all-out attacks">{{behaviorNotes}}</textarea>
+    </fieldset>
+  </div>
+  {{/if}}
+
+  <!-- Footer -->
+  <div class="cs-footer">
+    <button type="button" data-action="resetDefaults" class="cs-btn cs-btn-danger">
+      <i class="fa-solid fa-rotate-left"></i> Reset All
+    </button>
+    <button type="button" data-action="saveSettings" class="cs-btn cs-btn-primary">
+      <i class="fa-solid fa-save"></i> Save
+    </button>
+  </div>
+
+</div>

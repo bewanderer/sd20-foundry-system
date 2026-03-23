@@ -1,0 +1,53 @@
+<div class="sd20-macro-bar" data-character-uuid="{{uuid}}">
+  <!-- Macro Set Tabs -->
+  <div class="macro-set-tabs">
+    {{#each sets}}
+    <button class="macro-set-tab {{#if active}}active{{/if}}" data-set="{{@key}}">
+      Set {{@key}}
+    </button>
+    {{/each}}
+  </div>
+
+  <!-- Macro Slots -->
+  <div class="macro-slots">
+    {{#each slots}}
+    <div class="macro-slot {{#if macro}}filled{{else}}empty{{/if}}"
+         data-slot="{{@index}}"
+         data-hotkey="{{hotkey}}"
+         title="{{#if macro}}{{macro.name}}{{else}}Empty Slot{{/if}}">
+
+      {{#if macro}}
+        <div class="macro-icon">
+          <i class="{{macro.icon}}"></i>
+          {{#if macro.source}}
+          <span class="macro-source-badge {{macro.source}}"></span>
+          {{/if}}
+        </div>
+        <div class="macro-cost">
+          {{#if macro.apCost}}<span class="ap-cost">{{macro.apCost}} AP</span>{{/if}}
+          {{#if macro.fpCost}}<span class="fp-cost">{{macro.fpCost}} FP</span>{{/if}}
+        </div>
+      {{else}}
+        <div class="macro-empty-icon">
+          <i class="fa-solid fa-plus"></i>
+        </div>
+      {{/if}}
+
+      <div class="macro-hotkey">{{hotkey}}</div>
+    </div>
+    {{/each}}
+  </div>
+
+  <!-- Control Buttons -->
+  <div class="macro-controls">
+    <button class="macro-control-btn" data-action="add" title="Add Custom Macro">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+    <button class="macro-control-btn" data-action="refresh" title="Refresh from App">
+      <i class="fa-solid fa-sync"></i>
+    </button>
+    <button class="macro-control-btn" data-action="settings" title="Macro Settings">
+      <i class="fa-solid fa-cog"></i>
+    </button>
+  </div>
+</div>

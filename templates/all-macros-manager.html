@@ -1,0 +1,153 @@
+<div class="sd20-all-macros-manager">
+  <!-- Search and Filters Bar -->
+  <div class="manager-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" class="macro-search-input" placeholder="Search macros..." value="{{searchQuery}}" />
+    </div>
+    <div class="filter-box">
+      <select class="filter-category">
+        <option value="all" {{#if (eq filterCategory "all")}}selected{{/if}}>All Categories</option>
+        {{#each categories}}
+        <option value="{{id}}" {{#if (eq ../filterCategory id)}}selected{{/if}}>{{name}}</option>
+        {{/each}}
+      </select>
+      <select class="filter-set">
+        <option value="all" {{#if (eq filterSet "all")}}selected{{/if}}>All Sets</option>
+        {{#each allSets}}
+        <option value="{{id}}" {{#if (eq ../filterSet id)}}selected{{/if}}>{{name}}</option>
+        {{/each}}
+      </select>
+    </div>
+    <button type="button" class="selection-mode-toggle {{#if selectionMode}}active{{/if}}" data-action="toggleSelectionMode" title="{{#if selectionMode}}Exit selection mode{{else}}Select macros for bulk actions{{/if}}">
+      <i class="fa-solid fa-check-double"></i>
+    </button>
+  </div>
+
+  {{#if selectionMode}}
+  <!-- Selection Controls Bar -->
+  <div class="selection-toolbar">
+    <span class="selection-info">
+      <i class="fa-solid fa-square-check"></i>
+      {{selectedCount}} selected
+      {{#if selectedResetCount}}({{selectedResetCount}} can be reset){{/if}}
+    </span>
+    <div class="selection-actions">
+      <button type="button" data-action="selectAllVisible" title="Select all visible macros">
+        <i class="fa-solid fa-check-square"></i> Select All
+      </button>
+      <button type="button" data-action="deselectAll" title="Deselect all">
+        <i class="fa-regular fa-square"></i> Deselect All
+      </button>
+      {{#if selectedResetCount}}
+      <button type="button" class="reset-btn" data-action="resetToAppDefaults" title="Reset selected modified app macros to original values">
+        <i class="fa-solid fa-rotate-left"></i> Reset to App Defaults
+      </button>
+      {{/if}}
+    </div>
+  </div>
+  {{/if}}
+
+  <!-- Macro Sets Container -->
+  <div class="sets-container">
+    {{#each sets}}
+    <div class="set-section {{#unless active}}unavailable{{/unless}} {{#if expanded}}expanded{{/if}}" data-set-id="{{id}}">
+      <div class="set-header" data-action="toggleSet" data-set-id="{{id}}">
+        <input type="checkbox" class="set-available-toggle" {{#if active}}checked{{/if}} title="Available in macro bar" />
+        <span class="set-name">{{name}}</span>
+        <span class="macro-count">{{macroCount}} macros{{#if ../searchQuery}} ({{visibleCount}} shown){{/if}}</span>
+        <span class="set-spacer"></span>
+        <button type="button" class="add-macro-btn" data-action="addMacroToSet" data-set-id="{{id}}" title="Add macro to this set">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+        <button type="button" data-action="editSetName" data-set-id="{{id}}" data-set-name="{{name}}" title="Edit set name">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button type="button" data-action="deleteSet" data-set-id="{{id}}" data-set-name="{{name}}" title="Delete set">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+        <span class="expand-icon"><i class="fa-solid fa-chevron-down"></i></span>
+      </div>
+      <div class="set-content">
+        {{#each ../categories}}
+        {{#with (lookup ../macrosByCategory this.id)}}
+        {{#if this.length}}
+        <div class="category-group">
+          <div class="category-header">
+            <i class="{{../icon}}"></i>
+            <span>{{../name}}</span>
+            <span class="category-count">({{this.length}})</span>
+          </div>
+          <div class="category-macros">
+            {{#each this}}
+            <div class="macro-item {{#unless available}}unavailable{{/unless}} {{#if isModified}}modified{{/if}}" data-macro-id="{{id}}"
+                 data-macro-name="{{name}}" data-macro-desc="{{description}}" data-macro-icon="{{icon}}"
+                 data-macro-ap="{{apCost}}" data-macro-fp="{{fpCost}}" data-macro-range="{{range}}"
+                 data-macro-dice="{{json dice}}" data-macro-scaling="{{scalingBonus}}">
+              {{#if @root.selectionMode}}
+              <input type="checkbox" class="macro-selection-toggle" data-selection-key="{{selectionKey}}" {{#if selected}}checked{{/if}} title="Select for bulk action" />
+              {{else}}
+              <input type="checkbox" class="macro-available-toggle" data-macro-id="{{id}}" {{#if available}}checked{{/if}} title="Available in macro bar" />
+              {{/if}}
+              <i class="{{icon}}"></i>
+              <span class="macro-name">{{name}}</span>
+              {{#if isModified}}<span class="modified-indicator" title="Modified from app defaults">*</span>{{/if}}
+              <span class="macro-costs">
+                {{#if apCost}}<span class="ap">{{apCost}} AP</span>{{/if}}
+                {{#if fpCost}}<span class="fp">{{fpCost}} FP</span>{{/if}}
+              </span>
+              {{#if restAbility.type}}
+              <span class="rest-info">
+                <span class="rest-badge {{#if (eq restAbility.type 'short')}}sr{{else}}lr{{/if}}">{{#if (eq restAbility.type 'short')}}SR{{else}}LR{{/if}}</span>
+                <span class="rest-uses {{#unless restAbility.currentUses}}depleted{{/unless}}">{{restAbility.currentUses}}/{{restAbility.maxUsesResolved}}</span>
+              </span>
+              {{/if}}
+              <span class="macro-spacer"></span>
+              <button type="button" data-action="editMacro" data-macro-id="{{id}}" title="Edit macro">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button type="button" data-action="deleteMacro" data-macro-id="{{id}}" data-macro-name="{{name}}" title="Delete macro">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+        {{/with}}
+        {{/each}}
+
+        {{#unless visibleCount}}
+        <div class="empty-set-message">
+          {{#if ../searchQuery}}
+          No macros match your search.
+          {{else}}
+          No macros in this set.
+          {{/if}}
+        </div>
+        {{/unless}}
+      </div>
+    </div>
+    {{/each}}
+
+    {{#unless sets.length}}
+    <div class="no-sets-message">
+      {{#if searchQuery}}
+      No sets match your filters.
+      {{else}}
+      No macro sets found.
+      {{/if}}
+    </div>
+    {{/unless}}
+  </div>
+
+  <!-- Footer with action buttons -->
+  <div class="manager-footer">
+    <button type="button" data-action="addSet">
+      <i class="fa-solid fa-folder-plus"></i> Add New Set
+    </button>
+    <button type="button" data-action="importFromLibrary">
+      <i class="fa-solid fa-download"></i> Import from Library
+    </button>
+  </div>
+</div>

@@ -1,0 +1,116 @@
+<div class="sd20-macro-library">
+  <!-- Header with count and actions -->
+  <div class="library-header">
+    <span class="library-count">
+      {{filteredCount}} of {{totalCount}} macros
+      {{#if selectedCount}}<span class="selected-info">({{selectedCount}} selected)</span>{{/if}}
+    </span>
+    <div class="library-header-actions">
+      {{#if selectedCount}}
+      <button type="button" data-action="bulkCopyToActor" class="bulk-copy-btn" title="Copy selected macros to current Actor's macro bar">
+        <i class="fa-solid fa-copy"></i> Copy Selected
+      </button>
+      {{/if}}
+      {{#if totalCount}}
+      <button type="button" data-action="clearLibrary" title="Clear entire library">
+        <i class="fa-solid fa-trash"></i> Clear Library
+      </button>
+      {{/if}}
+    </div>
+  </div>
+
+  <!-- Search and Filters Bar -->
+  <div class="library-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" class="library-search-input" placeholder="Search library..." value="{{searchQuery}}" />
+    </div>
+    <div class="filter-box">
+      <select class="filter-category">
+        <option value="all" {{#if (eq filterCategory "all")}}selected{{/if}}>All Categories</option>
+        {{#each categories}}
+        <option value="{{id}}" {{#if (eq ../filterCategory id)}}selected{{/if}}>{{name}}</option>
+        {{/each}}
+      </select>
+      <select class="filter-actor">
+        <option value="all" {{#if (eq filterActor "all")}}selected{{/if}}>All Actors</option>
+        {{#each actorNames}}
+        <option value="{{this}}" {{#if (eq ../filterActor this)}}selected{{/if}}>{{this}}</option>
+        {{/each}}
+      </select>
+    </div>
+  </div>
+
+  <!-- Bulk select bar -->
+  {{#if filteredCount}}
+  <div class="library-select-bar">
+    <label class="select-all-label">
+      <input type="checkbox" class="select-all-checkbox" {{#if allSelected}}checked{{/if}} />
+      <span>Select All</span>
+    </label>
+  </div>
+  {{/if}}
+
+  <!-- Scrollable content area with collapsible category sections -->
+  <div class="library-content">
+    {{#each categoryGroups}}
+    <div class="library-category-section {{#if expanded}}expanded{{/if}}" data-category-id="{{id}}">
+      <div class="category-header" data-action="toggleCategory">
+        <i class="{{icon}}"></i>
+        <span>{{name}}</span>
+        <span class="category-count">{{macroCount}} macros</span>
+        <span class="category-spacer"></span>
+        <span class="expand-icon"><i class="fa-solid fa-chevron-down"></i></span>
+      </div>
+      <div class="category-content">
+        {{#each macros}}
+        <div class="library-macro-item {{#if selected}}is-selected{{/if}}" data-library-id="{{libraryId}}"
+             data-macro-name="{{name}}" data-macro-desc="{{description}}" data-macro-icon="{{icon}}"
+             data-macro-ap="{{apCost}}" data-macro-fp="{{fpCost}}" data-source-actor="{{sourceActor}}">
+          <input type="checkbox" class="macro-select-checkbox" data-library-id="{{libraryId}}" {{#if selected}}checked{{/if}} />
+          <i class="{{icon}}"></i>
+          <span class="macro-name">{{name}}</span>
+          <span class="macro-costs">
+            {{#if apCost}}<span class="ap">{{apCost}} AP</span>{{/if}}
+            {{#if fpCost}}<span class="fp">{{fpCost}} FP</span>{{/if}}
+          </span>
+          {{#if restAbility.type}}
+          <span class="rest-info">
+            <span class="rest-badge {{#if (eq restAbility.type 'short')}}sr{{else}}lr{{/if}}">{{#if (eq restAbility.type 'short')}}SR{{else}}LR{{/if}}</span>
+          </span>
+          {{/if}}
+          <span class="macro-source" title="From: {{sourceActor}}">{{sourceActor}}</span>
+          <span class="macro-spacer"></span>
+          <button type="button" data-action="copyToActor" data-library-id="{{libraryId}}" title="Add to macro bar">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          <button type="button" data-action="duplicateMacro" data-library-id="{{libraryId}}" title="Duplicate macro">
+            <i class="fa-solid fa-clone"></i>
+          </button>
+          <button type="button" data-action="editMacro" data-library-id="{{libraryId}}" data-macro-name="{{name}}" title="Edit macro">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button type="button" data-action="deleteMacro" data-library-id="{{libraryId}}" data-macro-name="{{name}}" title="Remove from library">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
+
+    {{#unless filteredCount}}
+    <div class="empty-library-message">
+      {{#if searchQuery}}
+      No macros match your search.
+      {{else if totalCount}}
+      No macros match the selected filter.
+      {{else}}
+      <p>Your macro library is empty.</p>
+      <p class="hint">Macros are automatically added to your library when you create custom macros or add macros from the SD20 App.</p>
+      <p class="hint">You can also right-click a macro in the macro bar and select "Save to Library".</p>
+      {{/if}}
+    </div>
+    {{/unless}}
+  </div>
+</div>

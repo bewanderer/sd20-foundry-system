@@ -1,0 +1,59 @@
+{
+  "id": "souls-d20",
+  "title": "Souls D20",
+  "description": "A full-system tabletop RPG inspired by Elden Ring and Soulsborne games. Features strategic combat, deep character customization, real-time sync between Foundry and the SD20 Character App, custom macro system, combat pipeline, and animation support!",
+  "version": "0.9.0",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "13"
+  },
+  "authors": [
+    {
+      "name": "Souls D20"
+    }
+  ],
+  "url": "https://github.com/bewanderer/sd20-foundry-system",
+  "manifest": "https://raw.githubusercontent.com/bewanderer/sd20-foundry-system/main/system.json",
+  "download": "https://github.com/bewanderer/sd20-foundry-system/archive/refs/heads/main.zip",
+  "esmodules": [
+    "scripts/souls-d20.js"
+  ],
+  "styles": [
+    "styles/souls-d20.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "relationships": {
+    "recommends": [
+      {
+        "id": "sequencer",
+        "type": "module",
+        "reason": "Enables spell and ability animations during combat"
+      },
+      {
+        "id": "socketlib",
+        "type": "module",
+        "reason": "Allows players to sync character data with tokens they own"
+      },
+      {
+        "id": "JB2A_DnD5e",
+        "type": "module",
+        "reason": "Animation library for spells, attacks, and effects"
+      }
+    ]
+  },
+  "initiative": "1d20 + @stats.dexterity.mod",
+  "primaryTokenAttribute": "hp",
+  "secondaryTokenAttribute": "fp",
+  "socket": true,
+  "grid": {
+    "type": 4,
+    "distance": 5,
+    "units": "ft"
+  }
+}

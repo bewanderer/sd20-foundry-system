@@ -1,0 +1,179 @@
+<!-- GM Ruling Panel -->
+<div class="ruling-panel-content">
+
+  {{#if (eq events.length 0)}}
+    <div class="ruling-empty">
+      <i class="fa-solid fa-gavel"></i>
+      <p>No pending rulings</p>
+    </div>
+  {{else}}
+
+    <div class="ruling-toolbar">
+      <span class="ruling-count">{{pendingCount}} pending</span>
+      <button type="button" data-action="clearAll" class="ruling-clear-btn">
+        <i class="fa-solid fa-trash"></i> Clear All
+      </button>
+    </div>
+
+    <div class="ruling-events">
+      {{#each events}}
+      <div class="ruling-event" data-event-id="{{id}}">
+
+        <!-- Event header -->
+        <div class="ruling-event-header">
+          <div class="ruling-event-names">
+            <strong>{{attackerName}}</strong>
+            <i class="fa-solid fa-arrow-right"></i>
+            <strong>{{defenderName}}</strong>
+          </div>
+          <span class="ruling-event-macro">{{macroName}}</span>
+          {{#if isRestoration}}
+            <span class="ruling-badge ruling-badge-restoration">Restoration</span>
+          {{else if (eq defenderResponse 'accept')}}
+            <span class="ruling-badge ruling-badge-accepted">Accepted</span>
+          {{else if (eq defenderResponse 'react')}}
+            <span class="ruling-badge ruling-badge-reacted">Reacted</span>
+          {{else}}
+            <span class="ruling-badge ruling-badge-pending">Pending</span>
+          {{/if}}
+        </div>
+
+        <!-- Bulk actions -->
+        <div class="ruling-bulk-actions">
+          <button type="button" data-action="approveAll" data-event-id="{{id}}" class="ruling-btn ruling-btn-approve">
+            <i class="fa-solid fa-check-double"></i> Approve All
+          </button>
+          <button type="button" data-action="denyAll" data-event-id="{{id}}" class="ruling-btn ruling-btn-deny">
+            <i class="fa-solid fa-xmark"></i> Deny All
+          </button>
+        </div>
+
+        <!-- Components -->
+        <div class="ruling-components">
+          {{#each components}}
+          <div class="ruling-component {{#if (eq ruling 'pending')}}ruling-pending{{else if (eq ruling 'approved')}}ruling-approved{{else if (eq ruling 'denied')}}ruling-resolved-denied{{else}}ruling-resolved{{/if}} {{#if (includes ../harmfulTypes type)}}ruling-harmful{{else}}ruling-positive{{/if}}" data-comp-id="{{id}}">
+
+            <!-- Component info - hide values until ruled -->
+            <div class="ruling-comp-info">
+              {{#if (eq type 'damage')}}
+                <span class="ruling-comp-type" style="color: {{lookup ../damageColors damageType}}">{{damageType}}</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">{{rawAmount}} dmg</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">? dmg</span>
+                {{/if}}
+              {{else if (eq type 'status-buildup')}}
+                <span class="ruling-comp-type">{{statusEffect}}</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">+{{rawAmount}} buildup</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">+? buildup</span>
+                {{/if}}
+              {{else if (eq type 'status-condition')}}
+                <span class="ruling-comp-type">{{condition}}</span>
+                {{#if totalDC}}
+                  <span class="ruling-comp-value">DC {{totalDC}}{{#if saveType}} ({{formatSaveType saveType}}){{/if}}{{#if duration}}, {{duration}} rnd{{/if}}</span>
+                {{else if dc}}
+                  <span class="ruling-comp-value">DC {{dc}}{{#if saveType}} ({{formatSaveType saveType}}){{/if}}{{#if duration}}, {{duration}} rnd{{/if}}</span>
+                {{else if duration}}
+                  <span class="ruling-comp-value">{{duration}} rnd</span>
+                {{else}}
+                  <span class="ruling-comp-value">Auto</span>
+                {{/if}}
+              {{else if (eq type 'heal-hp')}}
+                <span class="ruling-comp-type">Heal HP</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">{{rawAmount}}</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">?</span>
+                {{/if}}
+              {{else if (eq type 'restore-fp')}}
+                <span class="ruling-comp-type">Restore FP</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">{{rawAmount}}</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">?</span>
+                {{/if}}
+              {{else if (eq type 'restore-ap')}}
+                <span class="ruling-comp-type">Restore AP</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">{{rawAmount}}</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">?</span>
+                {{/if}}
+              {{else if (eq type 'reduce-buildup')}}
+                <span class="ruling-comp-type">Reduce {{statusEffect}}</span>
+                {{#if result}}
+                  <span class="ruling-comp-value">-{{rawAmount}}</span>
+                {{else}}
+                  <span class="ruling-comp-value ruling-hidden-value">-?</span>
+                {{/if}}
+              {{else if (eq type 'cure-condition')}}
+                <span class="ruling-comp-type">Cure Condition</span>
+                <span class="ruling-comp-value">{{#each conditions}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</span>
+              {{else if (eq type 'cure-effect')}}
+                <span class="ruling-comp-type">Cure Effect</span>
+                <span class="ruling-comp-value">{{#each statusEffects}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</span>
+              {{else if (eq type 'vulnerability')}}
+                <span class="ruling-comp-type" style="color: {{lookup ../damageColors damageType}}">{{damageType}} Vulnerability</span>
+                <span class="ruling-comp-value">x{{multiplier}}</span>
+              {{!-- CF4: Protection components --}}
+              {{else if (eq type 'damage-protection')}}
+                <span class="ruling-comp-type ruling-protection" style="color: {{lookup ../damageColors protectionType}}">{{protectionType}} Protection</span>
+                <span class="ruling-comp-value">
+                  {{#if tiers}}+{{tiers}}T {{/if}}{{#if flat}}+{{flat}} flat {{/if}}{{#if diceCount}}{{diceCount}}d{{diceSides}} {{/if}}{{#if percentage}}{{percentage}}% {{/if}}
+                  {{#if durationTurns}}({{durationTurns}} rds){{/if}}{{#if durationAttacks}}({{durationAttacks}} hits){{/if}}
+                </span>
+              {{else if (eq type 'buildup-protection')}}
+                <span class="ruling-comp-type ruling-protection">{{protectionType}} Buildup Prot.</span>
+                <span class="ruling-comp-value">
+                  {{#if flat}}+{{flat}} flat {{/if}}{{#if diceCount}}{{diceCount}}d{{diceSides}} {{/if}}{{#if percentage}}{{percentage}}% {{/if}}
+                  {{#if durationTurns}}({{durationTurns}} rds){{/if}}{{#if durationAttacks}}({{durationAttacks}} hits){{/if}}
+                </span>
+              {{else if (eq type 'condition-protection')}}
+                <span class="ruling-comp-type ruling-protection">{{condition}} Immunity</span>
+                <span class="ruling-comp-value">
+                  {{#if durationTurns}}{{durationTurns}} rds{{/if}}{{#if durationAttacks}}{{durationAttacks}} blocked{{/if}}
+                </span>
+              {{/if}}
+            </div>
+
+            <!-- Auto-reason tag -->
+            {{#if autoReason}}
+              <span class="ruling-auto-tag">{{autoReason}}</span>
+            {{/if}}
+
+            <!-- Result text (for resolved components) -->
+            {{#if result}}
+              <span class="ruling-result-text">
+                {{#if result.denied}}Denied{{/if}}
+                {{#if result.autoSucceed}}Resisted (GM){{/if}}
+                {{#if result.autoFail}}Forced (GM){{/if}}
+                {{#if result.calcResult.final}}→ {{result.calcResult.final}}{{/if}}
+                {{#if result.resisted}}Resisted{{/if}}
+              </span>
+            {{/if}}
+
+            <!-- Ruling buttons (only for pending/pre-approved) -->
+            {{#if (or (eq ruling 'pending') (eq ruling 'approved'))}}
+              <div class="ruling-comp-buttons">
+                <button type="button" data-action="approveComp" data-event-id="{{../id}}" data-comp-id="{{id}}" class="ruling-btn ruling-btn-approve" title="Approve">
+                  <i class="fa-solid fa-check"></i>
+                </button>
+                <button type="button" data-action="denyComp" data-event-id="{{../id}}" data-comp-id="{{id}}" class="ruling-btn ruling-btn-deny" title="Deny">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            {{/if}}
+
+          </div>
+          {{/each}}
+        </div>
+
+      </div>
+      {{/each}}
+    </div>
+
+  {{/if}}
+
+</div>

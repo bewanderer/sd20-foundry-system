@@ -1,0 +1,1921 @@
+<div class="sd20-macro-builder {{#unless isRestrictedCategory}}wide-layout{{/unless}}">
+  {{#if isAppMacro}}
+  <div class="app-macro-notice">
+    <div class="notice-text">
+      <i class="fa-solid fa-link"></i>
+      <span>Linked to SD20 App - edits will be preserved locally</span>
+    </div>
+  </div>
+  {{/if}}
+
+  {{#if isRestrictedCategory}}
+  <!-- Restricted Category: Simple layout with only name and modifier -->
+  <div class="restricted-category-layout">
+    <div class="restricted-notice">
+      <i class="fa-solid fa-lock"></i>
+      <span>Check macros have limited editing. Use "Reset to App Default" to sync changes from the app.</span>
+    </div>
+
+    {{#unless isRestrictedEditMode}}
+    <div class="form-group">
+      <label>Category</label>
+      <select name="macroCategory">
+        <option value="mainHand" {{#if (eq macroCategory "mainHand")}}selected{{/if}}>Main Hand</option>
+        <option value="offHand" {{#if (eq macroCategory "offHand")}}selected{{/if}}>Off Hand</option>
+        <option value="sorcery" {{#if (eq macroCategory "sorcery")}}selected{{/if}}>Sorcery</option>
+        <option value="hex" {{#if (eq macroCategory "hex")}}selected{{/if}}>Hex</option>
+        <option value="miracle" {{#if (eq macroCategory "miracle")}}selected{{/if}}>Miracle</option>
+        <option value="pyromancy" {{#if (eq macroCategory "pyromancy")}}selected{{/if}}>Pyromancy</option>
+        <option value="spirits" {{#if (eq macroCategory "spirits")}}selected{{/if}}>Spirits</option>
+        <option value="skills" {{#if (eq macroCategory "skills")}}selected{{/if}}>Skills</option>
+        <option value="abilities" {{#if (eq macroCategory "abilities")}}selected{{/if}}>Abilities</option>
+        <option value="initiative" {{#if (eq macroCategory "initiative")}}selected{{/if}}>Initiative</option>
+        <option value="skillChecks" {{#if (eq macroCategory "skillChecks")}}selected{{/if}}>Skill Checks</option>
+        <option value="knowledgeChecks" {{#if (eq macroCategory "knowledgeChecks")}}selected{{/if}}>Knowledge</option>
+        <option value="statChecks" {{#if (eq macroCategory "statChecks")}}selected{{/if}}>Stat Checks</option>
+        <option value="custom" {{#if (eq macroCategory "custom")}}selected{{/if}}>Custom</option>
+      </select>
+      <p class="hint">Changing category will switch the editor layout.</p>
+    </div>
+    {{/unless}}
+
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" name="name" value="{{name}}" placeholder="Macro Name" required />
+    </div>
+
+    <div class="form-group">
+      <label>Modifier</label>
+      <input type="number" name="scalingBonus" value="{{scalingBonus}}" />
+      <p class="hint">The bonus added to the 1d20 roll.</p>
+    </div>
+
+    <!-- Preserve hidden fields -->
+    {{#if isRestrictedEditMode}}
+    <input type="hidden" name="macroCategory" value="{{macroCategory}}" />
+    {{/if}}
+    <input type="hidden" name="icon" value="{{icon}}" />
+    <input type="hidden" name="apCost" value="0" />
+    <input type="hidden" name="fpCost" value="0" />
+  </div>
+  {{else}}
+  <!-- 4-Column Grid Layout -->
+  <div class="builder-columns {{#if scriptEdited}}builder-locked{{/if}}">
+    <!-- ============================================ -->
+    <!-- COLUMN 1: Basic Macro Information            -->
+    <!-- ============================================ -->
+    <div class="builder-column col-basic">
+      <div class="column-header">
+        <i class="fa-solid fa-info-circle"></i>
+        <span>Basic Info</span>
+      </div>
+      <div class="column-content">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" name="name" value="{{name}}" placeholder="Macro Name" required />
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea name="description" placeholder="Optional description" rows="2">{{description}}</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>AP Cost</label>
+            <input type="number" name="apCost" value="{{apCost}}" min="0" />
+          </div>
+          <div class="form-group half">
+            <label>FP Cost</label>
+            <input type="number" name="fpCost" value="{{fpCost}}" min="0" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Category</label>
+            <select name="macroCategory">
+              <option value="mainHand" {{#if (eq macroCategory "mainHand")}}selected{{/if}}>Main Hand</option>
+              <option value="offHand" {{#if (eq macroCategory "offHand")}}selected{{/if}}>Off Hand</option>
+              <option value="sorcery" {{#if (eq macroCategory "sorcery")}}selected{{/if}}>Sorcery</option>
+              <option value="hex" {{#if (eq macroCategory "hex")}}selected{{/if}}>Hex</option>
+              <option value="miracle" {{#if (eq macroCategory "miracle")}}selected{{/if}}>Miracle</option>
+              <option value="pyromancy" {{#if (eq macroCategory "pyromancy")}}selected{{/if}}>Pyromancy</option>
+              <option value="spirits" {{#if (eq macroCategory "spirits")}}selected{{/if}}>Spirits</option>
+              <option value="skills" {{#if (eq macroCategory "skills")}}selected{{/if}}>Skills</option>
+              <option value="abilities" {{#if (eq macroCategory "abilities")}}selected{{/if}}>Abilities</option>
+              <option value="initiative" {{#if (eq macroCategory "initiative")}}selected{{/if}}>Initiative</option>
+              <option value="skillChecks" {{#if (eq macroCategory "skillChecks")}}selected{{/if}}>Skill Checks</option>
+              <option value="knowledgeChecks" {{#if (eq macroCategory "knowledgeChecks")}}selected{{/if}}>Knowledge</option>
+              <option value="statChecks" {{#if (eq macroCategory "statChecks")}}selected{{/if}}>Stat Checks</option>
+              <option value="custom" {{#if (eq macroCategory "custom")}}selected{{/if}}>Custom</option>
+            </select>
+          </div>
+          <div class="form-group half">
+            <label>Icon</label>
+            <div class="icon-selector">
+              <button type="button" class="icon-preview" data-action="selectIcon">
+                <i class="{{icon}}"></i>
+              </button>
+              <input type="hidden" name="icon" value="{{icon}}" />
+              <span class="icon-name">{{icon}}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Range (ft)</label>
+          <input type="number" name="range" {{#if range}}value="{{range}}"{{/if}} placeholder="Optional" min="0" />
+          <p class="hint">Hover over macro to highlight hexes within range.</p>
+        </div>
+
+        <div class="form-group">
+          <label>Simple Roll</label>
+          <div class="simple-dice-row">
+            <input type="number" name="simpleRoll.diceCount" {{#if simpleRoll.diceCount}}value="{{simpleRoll.diceCount}}"{{/if}} placeholder="#" min="1" class="input-sm" title="Number of dice" />
+            <span>d</span>
+            <select name="simpleRoll.diceSides" class="select-sm" title="Die size">
+              <option value="" {{#unless simpleRoll.diceSides}}selected{{/unless}}>--</option>
+              <option value="2" {{#if (eq simpleRoll.diceSides 2)}}selected{{/if}}>2</option>
+              <option value="4" {{#if (eq simpleRoll.diceSides 4)}}selected{{/if}}>4</option>
+              <option value="6" {{#if (eq simpleRoll.diceSides 6)}}selected{{/if}}>6</option>
+              <option value="8" {{#if (eq simpleRoll.diceSides 8)}}selected{{/if}}>8</option>
+              <option value="10" {{#if (eq simpleRoll.diceSides 10)}}selected{{/if}}>10</option>
+              <option value="12" {{#if (eq simpleRoll.diceSides 12)}}selected{{/if}}>12</option>
+              <option value="20" {{#if (eq simpleRoll.diceSides 20)}}selected{{/if}}>20</option>
+              <option value="100" {{#if (eq simpleRoll.diceSides 100)}}selected{{/if}}>100</option>
+            </select>
+            <span class="field-label">+</span>
+            <input type="number" name="simpleRoll.bonus" {{#if simpleRoll.bonus}}value="{{simpleRoll.bonus}}"{{/if}} placeholder="0" class="input-sm" title="Flat bonus" />
+          </div>
+          <p class="hint">Optional simple roll (non-damage). Ignored unless dice type is selected.</p>
+        </div>
+
+        <!-- REST ABILITY (SR/LR) -->
+        <div class="form-group rest-ability-section">
+          <label>Rest Ability</label>
+          <select name="restAbility.type" class="rest-type-select">
+            <option value="" {{#unless restAbility.type}}selected{{/unless}}>None</option>
+            <option value="short" {{#if (eq restAbility.type "short")}}selected{{/if}}>Short Rest (SR)</option>
+            <option value="long" {{#if (eq restAbility.type "long")}}selected{{/if}}>Long Rest (LR)</option>
+          </select>
+          <p class="hint">Abilities with limited uses that recover on rest.</p>
+        </div>
+
+        <div class="rest-uses-config {{#unless restAbility.type}}hidden{{/unless}}">
+          <div class="form-group">
+            <label>Max Uses</label>
+            <div class="rest-mode-toggle">
+              <label class="radio-label">
+                <input type="radio" name="restAbility.maxUses.mode" value="flat" {{#if (eq restAbility.maxUses.mode "flat")}}checked{{else}}{{#unless restAbility.maxUses.mode}}checked{{/unless}}{{/if}} />
+                <span>Flat</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="restAbility.maxUses.mode" value="formula" {{#if (eq restAbility.maxUses.mode "formula")}}checked{{/if}} />
+                <span>Formula</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Flat mode input -->
+          <div class="rest-flat-config {{#if (eq restAbility.maxUses.mode "formula")}}hidden{{/if}}">
+            <div class="form-group">
+              <input type="number" name="restAbility.maxUses.flat" value="{{restAbility.maxUses.flat}}" min="1" placeholder="3" />
+            </div>
+          </div>
+
+          <!-- Formula mode -->
+          <div class="rest-formula-config {{#unless (eq restAbility.maxUses.mode "formula")}}hidden{{/unless}}">
+            <div class="formula-terms">
+              {{#each restAbility.maxUses.terms}}
+              <div class="formula-term" data-term-index="{{@index}}">
+                {{#if @index}}
+                <select name="restAbility.term{{@index}}.chain" class="chain-select">
+                  <option value="add" {{#if (eq this.chain "add")}}selected{{else}}{{#unless this.chain}}selected{{/unless}}{{/if}}>+</option>
+                  <option value="subtract" {{#if (eq this.chain "subtract")}}selected{{/if}}>−</option>
+                  <option value="multiply" {{#if (eq this.chain "multiply")}}selected{{/if}}>×</option>
+                  <option value="divide" {{#if (eq this.chain "divide")}}selected{{/if}}>÷</option>
+                </select>
+                {{/if}}
+                <select name="restAbility.term{{@index}}.source" class="source-select">
+                  {{#each ../restFormulaSources}}
+                  <option value="{{this.value}}" {{#if (eq ../source this.value)}}selected{{/if}}>{{this.label}}</option>
+                  {{/each}}
+                </select>
+                <input type="number" name="restAbility.term{{@index}}.flatValue" value="{{this.flatValue}}" placeholder="0" class="flat-value-input {{#unless (eq this.source "flat")}}hidden{{/unless}}" />
+                <select name="restAbility.term{{@index}}.operation" class="operation-select">
+                  <option value="none" {{#if (eq this.operation "none")}}selected{{else}}{{#unless this.operation}}selected{{/unless}}{{/if}}>--</option>
+                  <option value="multiply" {{#if (eq this.operation "multiply")}}selected{{/if}}>x</option>
+                  <option value="divide" {{#if (eq this.operation "divide")}}selected{{/if}}>/</option>
+                </select>
+                <input type="number" name="restAbility.term{{@index}}.modifier" value="{{this.modifier}}" placeholder="1" class="modifier-input {{#if (eq this.operation "none")}}hidden{{else}}{{#unless this.operation}}hidden{{/unless}}{{/if}}" />
+                {{#if @index}}
+                <button type="button" class="remove-term-btn" data-action="removeTerm" data-index="{{@index}}" title="Remove term">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+                {{/if}}
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" class="add-term-btn" data-action="addTerm" {{#if (gte restAbility.maxUses.terms.length 3)}}disabled{{/if}}>
+              <i class="fa-solid fa-plus"></i> Add Term
+            </button>
+            <p class="hint">Each term rounds down. Minimum 0.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- COLUMN 2: Combat Config (Collapsible)        -->
+    <!-- ============================================ -->
+    <div class="builder-column col-combat">
+      <!-- Main Tab Bar: Combat vs Animation -->
+      <div class="main-tab-bar">
+        <button type="button" class="main-tab-btn {{#if (eq activeMainTab 'combat')}}active{{/if}}" data-maintab="combat">
+          <i class="fa-solid fa-swords"></i> Combat
+        </button>
+        <button type="button" class="main-tab-btn {{#if (eq activeMainTab 'animation')}}active{{/if}}" data-maintab="animation" {{#unless animationAvailable}}disabled title="Sequencer module required"{{/unless}}>
+          <i class="fa-solid fa-film"></i> Animation
+        </button>
+      </div>
+
+      <!-- COMBAT CONTENT (shown when Combat tab active) -->
+      <div class="main-tab-content {{#if (eq activeMainTab 'combat')}}active{{/if}}" data-maintab-content="combat">
+        <div class="column-header combat-effects-header">
+          <div class="combat-tab-bar">
+            <button type="button" class="combat-tab-btn {{#if (eq activeCombatTab 'primary')}}active{{/if}}" data-tab="primary">
+              <i class="fa-solid fa-swords"></i> Primary
+            </button>
+            <button type="button" class="combat-tab-btn {{#if (eq activeCombatTab 'secondary')}}active{{/if}}" data-tab="secondary">
+              <i class="fa-solid fa-wand-sparkles"></i> Secondary
+            </button>
+          </div>
+        </div>
+        <div class="column-content">
+        <!-- PRIMARY EFFECTS TAB -->
+        <div class="combat-effects-tab {{#if (eq activeCombatTab 'primary')}}active{{/if}}" data-combat-tab="primary">
+          <div class="trigger-on-cast-option">
+            <label class="checkbox-label">
+              <input type="checkbox" name="combat.triggerOnCast" {{#if combat.triggerOnCast}}checked{{/if}} />
+              <span>Trigger on cast</span>
+            </label>
+          </div>
+        <!-- DAMAGE TYPES -->
+        <div class="combat-section collapsible {{#if expandedSections.damageTypes}}expanded{{/if}}" data-section="damageTypes">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-burst"></i>
+            <span>Damage Types</span>
+            <span class="section-count">{{#if combat.damageTypes.length}}({{combat.damageTypes.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-damage-list">
+              {{#each combat.damageTypes}}
+              <div class="combat-damage-item {{#if piercing.expanded}}piercing-expanded{{/if}}" data-index="{{@index}}">
+                <!-- Row 1: Type & Dice -->
+                <div class="combat-component-row damage-row-main">
+                  <span class="field-label">Type:</span>
+                  <select name="combat.damageTypes[{{@index}}].type" class="damage-type-select">
+                    <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                    <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                    <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                    <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                    <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                    <option value="TRUE" {{#if (eq type "TRUE")}}selected{{/if}}>True</option>
+                    <option value="FP" {{#if (eq type "FP")}}selected{{/if}}>FP Drain</option>
+                    <option value="AP" {{#if (eq type "AP")}}selected{{/if}}>AP Drain</option>
+                  </select>
+                  <span class="field-label">Dice:</span>
+                  <input type="number" name="combat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="1" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <span class="dice-d">d</span>
+                  <select name="combat.damageTypes[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <span class="field-label">+</span>
+                  <input type="number" name="combat.damageTypes[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="0" class="input-flat-bonus" title="Flat bonus added to roll" />
+                  <button type="button" data-action="removeDamageType" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Scaling & Piercing Toggle -->
+                <div class="combat-component-row damage-row-options">
+                  <span class="field-label">Scaling:</span>
+                  {{!-- Same scaling dropdown for both player and monster: None or Manual --}}
+                  <select name="combat.damageTypes[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="manual" {{#if (eq scalingSource "manual")}}selected{{/if}}>Manual</option>
+                  </select>
+                  {{!-- Piercing button - hidden via JS for TRUE, FP, AP (they bypass resistance) --}}
+                  <button type="button" data-action="togglePiercing" data-index="{{@index}}" class="piercing-toggle-btn {{#if (or piercing.tiers piercing.allTiers)}}has-piercing{{/if}} {{#if (or (eq type 'TRUE') (eq type 'FP') (eq type 'AP'))}}hidden{{/if}}" title="Piercing options">
+                    <i class="fa-solid fa-crosshairs"></i> Piercing
+                  </button>
+                </div>
+                {{!-- Row 3: Piercing Details (expandable) - hidden via JS for TRUE, FP, AP --}}
+                <div class="piercing-row {{#unless piercing.expanded}}hidden{{/unless}} {{#if (or (eq type 'TRUE') (eq type 'FP') (eq type 'AP'))}}no-piercing{{/if}}">
+                  <span class="field-label">Tiers:</span>
+                  <select name="combat.damageTypes[{{@index}}].piercing.tiers" class="select-piercing-tiers" title="Piercing tiers" {{#if piercing.allTiers}}disabled{{/if}}>
+                    <option value="0" {{#if (eq piercing.tiers 0)}}selected{{/if}}>0</option>
+                    <option value="1" {{#if (eq piercing.tiers 1)}}selected{{/if}}>1</option>
+                    <option value="2" {{#if (eq piercing.tiers 2)}}selected{{/if}}>2</option>
+                    <option value="3" {{#if (eq piercing.tiers 3)}}selected{{/if}}>3</option>
+                    <option value="4" {{#if (eq piercing.tiers 4)}}selected{{/if}}>4</option>
+                  </select>
+                  <label class="checkbox-label piercing-all-label">
+                    <input type="checkbox" name="combat.damageTypes[{{@index}}].piercing.allTiers" class="piercing-all-checkbox" {{#if piercing.allTiers}}checked{{/if}} />
+                    <span>Ignore All</span>
+                  </label>
+                  <span class="piercing-hint">Reduces target resistance</span>
+                </div>
+                {{!-- Row 4: Manual Scaling Entries (expandable) - shown when scalingSource is 'manual' --}}
+                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="damageTypes" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                  {{!-- Header labels for scaling columns --}}
+                  <div class="manual-scaling-header">
+                    {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}
+                    <span class="scaling-header-label grade-label">Grade</span>
+                    <span class="scaling-header-label stat-label">Stat</span>
+                    <span class="scaling-header-label fraction-label">Fraction</span>
+                  </div>
+                  <div class="manual-scaling-entries">
+                    {{#each manualScalingEntries}}
+                    <div class="manual-scaling-row" data-entry-index="{{@index}}" data-stat="{{stat}}">
+                      {{#if ../../isNPC}}
+                      {{!-- Monster: Show mode dropdown (Graded/Flat) --}}
+                      <select name="combat.damageTypes[{{@../index}}].manualScalingEntries[{{@index}}].mode" class="select-sm scaling-mode-select" title="Scaling mode">
+                        <option value="graded" {{#if (eq mode "graded")}}selected{{/if}}>Grade × Mod</option>
+                        <option value="flat" {{#if (eq mode "flat")}}selected{{/if}}>Stat Value</option>
+                      </select>
+                      {{else}}
+                      {{!-- Player: Always graded, no mode dropdown --}}
+                      <input type="hidden" name="combat.damageTypes[{{@../index}}].manualScalingEntries[{{@index}}].mode" value="graded" />
+                      {{/if}}
+                      {{!-- Grade dropdown - hidden for monsters when mode is 'flat' --}}
+                      <select name="combat.damageTypes[{{@../index}}].manualScalingEntries[{{@index}}].grade" class="select-sm scaling-grade-select {{#if (and ../../isNPC (eq mode 'flat'))}}hidden{{/if}}" title="Grade multiplier (E=0.5, D=1, C=1.5, B=2, A=2.5, S=3, SS=4, SSS=5)">
+                        <option value="E" {{#if (eq grade "E")}}selected{{/if}}>E</option>
+                        <option value="D" {{#if (eq grade "D")}}selected{{/if}}>D</option>
+                        <option value="C" {{#if (eq grade "C")}}selected{{/if}}>C</option>
+                        <option value="B" {{#if (eq grade "B")}}selected{{/if}}>B</option>
+                        <option value="A" {{#if (eq grade "A")}}selected{{/if}}>A</option>
+                        <option value="S" {{#if (eq grade "S")}}selected{{/if}}>S</option>
+                        <option value="SS" {{#if (eq grade "SS")}}selected{{/if}}>SS</option>
+                        <option value="SSS" {{#if (eq grade "SSS")}}selected{{/if}}>SSS</option>
+                      </select>
+                      <select name="combat.damageTypes[{{@../index}}].manualScalingEntries[{{@index}}].stat" class="select-sm scaling-stat-select" title="{{#if (and ../../isNPC (eq mode 'flat'))}}Uses raw stat value{{else}}Uses stat modifier{{/if}}">
+                        <option value="vitality" {{#if (eq stat "vitality")}}selected{{/if}}>VIT</option>
+                        <option value="endurance" {{#if (eq stat "endurance")}}selected{{/if}}>END</option>
+                        <option value="strength" {{#if (eq stat "strength")}}selected{{/if}}>STR</option>
+                        <option value="dexterity" {{#if (eq stat "dexterity")}}selected{{/if}}>DEX</option>
+                        <option value="attunement" {{#if (eq stat "attunement")}}selected{{/if}}>ATT</option>
+                        <option value="intelligence" {{#if (eq stat "intelligence")}}selected{{/if}}>INT</option>
+                        <option value="faith" {{#if (eq stat "faith")}}selected{{/if}}>FAI</option>
+                      </select>
+                      <select name="combat.damageTypes[{{@../index}}].manualScalingEntries[{{@index}}].fraction" class="select-sm scaling-fraction-select" title="Fraction of scaling">
+                        <option value="full" {{#if (eq fraction "full")}}selected{{/if}}>Full</option>
+                        <option value="half" {{#if (eq fraction "half")}}selected{{/if}}>Half</option>
+                        <option value="third" {{#if (eq fraction "third")}}selected{{/if}}>Third</option>
+                        <option value="quarter" {{#if (eq fraction "quarter")}}selected{{/if}}>Quarter</option>
+                      </select>
+                      <button type="button" data-action="removeManualScaling" data-component="damageTypes" data-component-index="{{@../index}}" data-entry-index="{{@index}}" class="remove-btn scaling-remove-btn" title="Remove scaling entry">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
+                    {{/each}}
+                  </div>
+                  <button type="button" data-action="addManualScaling" data-component="damageTypes" data-component-index="{{@index}}" class="add-scaling-btn" title="Add scaling entry">
+                    <i class="fa-solid fa-plus"></i> Add Scaling
+                  </button>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addDamageType" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Damage
+            </button>
+          </div>
+        </div>
+
+        <!-- STATUS BUILDUP -->
+        <div class="combat-section collapsible {{#if expandedSections.statusEffects}}expanded{{/if}}" data-section="statusEffects">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-droplet"></i>
+            <span>Status Buildup</span>
+            <span class="section-count">{{#if combat.statusEffects.length}}({{combat.statusEffects.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-buildup-list">
+              {{#each combat.statusEffects}}
+              <div class="combat-buildup-item" data-index="{{@index}}">
+                <!-- Row 1: Effect & Dice -->
+                <div class="combat-component-row buildup-row-main">
+                  <span class="field-label">Effect:</span>
+                  <select name="combat.statusEffects[{{@index}}].name" class="buildup-type-select">
+                    <option value="Bleed" {{#if (eq name "Bleed")}}selected{{/if}}>Bleed</option>
+                    <option value="Poison" {{#if (eq name "Poison")}}selected{{/if}}>Poison</option>
+                    <option value="Toxic" {{#if (eq name "Toxic")}}selected{{/if}}>Toxic</option>
+                    <option value="Frost" {{#if (eq name "Frost")}}selected{{/if}}>Frost</option>
+                    <option value="Curse" {{#if (eq name "Curse")}}selected{{/if}}>Curse</option>
+                    <option value="Poise" {{#if (eq name "Poise")}}selected{{/if}}>Poise</option>
+                  </select>
+                  <span class="field-label">Dice:</span>
+                  <input type="number" name="combat.statusEffects[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <span class="dice-d">d</span>
+                  <select name="combat.statusEffects[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <span class="field-label">+</span>
+                  <input type="number" name="combat.statusEffects[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="0" class="input-flat-bonus" title="Flat bonus" />
+                  <button type="button" data-action="removeStatusEffect" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Scaling -->
+                <div class="combat-component-row buildup-row-options">
+                  <span class="field-label">Scaling:</span>
+                  {{!-- Same scaling dropdown for both player and monster: None or Manual --}}
+                  <select name="combat.statusEffects[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="manual" {{#if (eq scalingSource "manual")}}selected{{/if}}>Manual</option>
+                  </select>
+                </div>
+                {{!-- Row 3: Manual Scaling Entries --}}
+                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="statusEffects" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                  {{!-- Header labels for scaling columns --}}
+                  <div class="manual-scaling-header">
+                    {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}
+                    <span class="scaling-header-label grade-label">Grade</span>
+                    <span class="scaling-header-label stat-label">Stat</span>
+                    <span class="scaling-header-label fraction-label">Fraction</span>
+                  </div>
+                  <div class="manual-scaling-entries">
+                    {{#each manualScalingEntries}}
+                    <div class="manual-scaling-row" data-entry-index="{{@index}}" data-stat="{{stat}}">
+                      {{#if ../../isNPC}}
+                      {{!-- Monster: Show mode dropdown (Graded/Flat) --}}
+                      <select name="combat.statusEffects[{{@../index}}].manualScalingEntries[{{@index}}].mode" class="select-sm scaling-mode-select" title="Scaling mode">
+                        <option value="graded" {{#if (eq mode "graded")}}selected{{/if}}>Grade × Mod</option>
+                        <option value="flat" {{#if (eq mode "flat")}}selected{{/if}}>Stat Value</option>
+                      </select>
+                      {{else}}
+                      {{!-- Player: Always graded, no mode dropdown --}}
+                      <input type="hidden" name="combat.statusEffects[{{@../index}}].manualScalingEntries[{{@index}}].mode" value="graded" />
+                      {{/if}}
+                      {{!-- Grade dropdown - hidden for monsters when mode is 'flat' --}}
+                      <select name="combat.statusEffects[{{@../index}}].manualScalingEntries[{{@index}}].grade" class="select-sm scaling-grade-select {{#if (and ../../isNPC (eq mode 'flat'))}}hidden{{/if}}" title="Grade multiplier (E=0.5, D=1, C=1.5, B=2, A=2.5, S=3, SS=4, SSS=5)">
+                        <option value="E" {{#if (eq grade "E")}}selected{{/if}}>E</option>
+                        <option value="D" {{#if (eq grade "D")}}selected{{/if}}>D</option>
+                        <option value="C" {{#if (eq grade "C")}}selected{{/if}}>C</option>
+                        <option value="B" {{#if (eq grade "B")}}selected{{/if}}>B</option>
+                        <option value="A" {{#if (eq grade "A")}}selected{{/if}}>A</option>
+                        <option value="S" {{#if (eq grade "S")}}selected{{/if}}>S</option>
+                        <option value="SS" {{#if (eq grade "SS")}}selected{{/if}}>SS</option>
+                        <option value="SSS" {{#if (eq grade "SSS")}}selected{{/if}}>SSS</option>
+                      </select>
+                      <select name="combat.statusEffects[{{@../index}}].manualScalingEntries[{{@index}}].stat" class="select-sm scaling-stat-select" title="{{#if (and ../../isNPC (eq mode 'flat'))}}Uses raw stat value{{else}}Uses stat modifier{{/if}}">
+                        <option value="vitality" {{#if (eq stat "vitality")}}selected{{/if}}>VIT</option>
+                        <option value="endurance" {{#if (eq stat "endurance")}}selected{{/if}}>END</option>
+                        <option value="strength" {{#if (eq stat "strength")}}selected{{/if}}>STR</option>
+                        <option value="dexterity" {{#if (eq stat "dexterity")}}selected{{/if}}>DEX</option>
+                        <option value="attunement" {{#if (eq stat "attunement")}}selected{{/if}}>ATT</option>
+                        <option value="intelligence" {{#if (eq stat "intelligence")}}selected{{/if}}>INT</option>
+                        <option value="faith" {{#if (eq stat "faith")}}selected{{/if}}>FAI</option>
+                      </select>
+                      <select name="combat.statusEffects[{{@../index}}].manualScalingEntries[{{@index}}].fraction" class="select-sm scaling-fraction-select" title="Fraction of scaling">
+                        <option value="full" {{#if (eq fraction "full")}}selected{{/if}}>Full</option>
+                        <option value="half" {{#if (eq fraction "half")}}selected{{/if}}>Half</option>
+                        <option value="third" {{#if (eq fraction "third")}}selected{{/if}}>Third</option>
+                        <option value="quarter" {{#if (eq fraction "quarter")}}selected{{/if}}>Quarter</option>
+                      </select>
+                      <button type="button" data-action="removeManualScaling" data-component="statusEffects" data-component-index="{{@../index}}" data-entry-index="{{@index}}" class="remove-btn scaling-remove-btn" title="Remove scaling entry">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
+                    {{/each}}
+                  </div>
+                  <button type="button" data-action="addManualScaling" data-component="statusEffects" data-component-index="{{@index}}" class="add-scaling-btn" title="Add scaling entry">
+                    <i class="fa-solid fa-plus"></i> Add Scaling
+                  </button>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addStatusEffect" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Buildup
+            </button>
+          </div>
+        </div>
+
+        <!-- STATUS CONDITIONS -->
+        <div class="combat-section collapsible {{#if expandedSections.statusConditions}}expanded{{/if}}" data-section="statusConditions">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-bolt"></i>
+            <span>Status Conditions</span>
+            <span class="section-count">{{#if combat.statusConditions.length}}({{combat.statusConditions.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-condition-list">
+              {{#each combat.statusConditions}}
+              <div class="combat-condition-item" data-index="{{@index}}">
+                <!-- Row 1: Condition & Duration -->
+                <div class="combat-component-row condition-row-main">
+                  <span class="field-label">Condition:</span>
+                  <select name="combat.statusConditions[{{@index}}].name" class="condition-type-select">
+                    {{#each ../conditionOptions}}
+                    <option value="{{this}}" {{#if (eq this ../name)}}selected{{/if}}>{{this}}</option>
+                    {{/each}}
+                  </select>
+                  <span class="field-label">Rounds:</span>
+                  <input type="number" name="combat.statusConditions[{{@index}}].duration" value="{{duration}}" min="0" placeholder="∞" class="input-compact" title="Duration in rounds (empty = indefinite)" />
+                  <button type="button" data-action="removeStatusCondition" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Save Options -->
+                <div class="combat-component-row condition-row-options">
+                  <label class="checkbox-label no-save-toggle" title="No save allowed - condition auto-applies (pending GM ruling)">
+                    <input type="checkbox" name="combat.statusConditions[{{@index}}].noSave" {{#if noSave}}checked{{/if}} />
+                    <span>No Save</span>
+                  </label>
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">DC:</span>
+                  <input type="number" name="combat.statusConditions[{{@index}}].dc" value="{{dc}}" min="1" placeholder="--" class="input-compact save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="Save DC" />
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">+</span>
+                  <select name="combat.statusConditions[{{@index}}].dcBonusSource" class="select-sm save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="DC bonus source">
+                    <option value="none" {{#if (eq dcBonusSource "none")}}selected{{/if}}>None</option>
+                    <option value="weaponScaling" {{#if (eq dcBonusSource "weaponScaling")}}selected{{/if}}>Wpn</option>
+                    {{#each ../dcBonusSources}}
+                    <option value="{{value}}" {{#if (eq value ../dcBonusSource)}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                  </select>
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">Check:</span>
+                  <select name="combat.statusConditions[{{@index}}].saveType" class="select-sm save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="What check target rolls">
+                    <option value="" {{#unless saveType}}selected{{/unless}}>--</option>
+                    <optgroup label="Stats">
+                      <option value="stat:vitality" {{#if (eq saveType "stat:vitality")}}selected{{/if}}>Vitality</option>
+                      <option value="stat:endurance" {{#if (eq saveType "stat:endurance")}}selected{{/if}}>Endurance</option>
+                      <option value="stat:strength" {{#if (eq saveType "stat:strength")}}selected{{/if}}>Strength</option>
+                      <option value="stat:dexterity" {{#if (eq saveType "stat:dexterity")}}selected{{/if}}>Dexterity</option>
+                      <option value="stat:attunement" {{#if (eq saveType "stat:attunement")}}selected{{/if}}>Attunement</option>
+                      <option value="stat:intelligence" {{#if (eq saveType "stat:intelligence")}}selected{{/if}}>Intelligence</option>
+                      <option value="stat:faith" {{#if (eq saveType "stat:faith")}}selected{{/if}}>Faith</option>
+                    </optgroup>
+                    <optgroup label="Skills">
+                      <option value="skill:Athletics" {{#if (eq saveType "skill:Athletics")}}selected{{/if}}>Athletics</option>
+                      <option value="skill:Acrobatics" {{#if (eq saveType "skill:Acrobatics")}}selected{{/if}}>Acrobatics</option>
+                      <option value="skill:Perception" {{#if (eq saveType "skill:Perception")}}selected{{/if}}>Perception</option>
+                      <option value="skill:FireKeeping" {{#if (eq saveType "skill:FireKeeping")}}selected{{/if}}>Fire Keeping</option>
+                      <option value="skill:Sanity" {{#if (eq saveType "skill:Sanity")}}selected{{/if}}>Sanity</option>
+                      <option value="skill:Stealth" {{#if (eq saveType "skill:Stealth")}}selected{{/if}}>Stealth</option>
+                      <option value="skill:Precision" {{#if (eq saveType "skill:Precision")}}selected{{/if}}>Precision</option>
+                      <option value="skill:Diplomacy" {{#if (eq saveType "skill:Diplomacy")}}selected{{/if}}>Diplomacy</option>
+                    </optgroup>
+                    <optgroup label="Knowledge">
+                      <option value="knowledge:Magics" {{#if (eq saveType "knowledge:Magics")}}selected{{/if}}>Magics</option>
+                      <option value="knowledge:WorldHistory" {{#if (eq saveType "knowledge:WorldHistory")}}selected{{/if}}>World History</option>
+                      <option value="knowledge:Monsters" {{#if (eq saveType "knowledge:Monsters")}}selected{{/if}}>Monsters</option>
+                      <option value="knowledge:Cosmic" {{#if (eq saveType "knowledge:Cosmic")}}selected{{/if}}>Cosmic</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <!-- Row 3: Stacks (only for Frenzy/Exhaustion) -->
+                <div class="combat-component-row condition-row-stacks {{#unless (or (eq name "Frenzy") (eq name "Exhaustion"))}}hidden{{/unless}}">
+                  <span class="field-label">Stacks:</span>
+                  <input type="number" name="combat.statusConditions[{{@index}}].stacks" value="{{stacks}}" min="1" class="input-compact" title="Number of stacks to apply" />
+                  <label class="checkbox-inline" title="If checked, stacks are added to existing. If unchecked, replaces existing stacks.">
+                    <input type="checkbox" name="combat.statusConditions[{{@index}}].stacking" {{#if stacking}}checked{{/if}} />
+                    <span>Stacks</span>
+                  </label>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addStatusCondition" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Condition
+            </button>
+          </div>
+        </div>
+
+        <!-- VULNERABILITIES -->
+        <div class="combat-section collapsible {{#if expandedSections.vulnerabilities}}expanded{{/if}}" data-section="vulnerabilities">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-shield-xmark"></i>
+            <span>Vulnerabilities</span>
+            <span class="section-count">{{#if combat.vulnerabilities.length}}({{combat.vulnerabilities.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <p class="section-hint">Apply resistance reduction to targets. Can reduce below 0.</p>
+            <div class="combat-vulnerability-list">
+              {{#each combat.vulnerabilities}}
+              <div class="combat-vulnerability-item" data-index="{{@index}}">
+                <!-- Row 1: Type & Values -->
+                <div class="combat-component-row vuln-row-main">
+                  <span class="field-label">Type:</span>
+                  <select name="combat.vulnerabilities[{{@index}}].type" class="vulnerability-type-select">
+                    <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                    <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                    <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                    <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                    <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                  </select>
+                  <span class="field-label">Tiers:</span>
+                  <input type="number" name="combat.vulnerabilities[{{@index}}].tiers" value="{{tiers}}" min="0" max="8" class="input-compact" title="Tier reduction" />
+                  <span class="field-label">Rounds:</span>
+                  <input type="number" name="combat.vulnerabilities[{{@index}}].duration" value="{{duration}}" min="1" class="input-compact" title="Duration in rounds" />
+                  <button type="button" data-action="removeVulnerability" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Options -->
+                <div class="combat-component-row vuln-row-options">
+                  <span class="field-label">Timing:</span>
+                  <select name="combat.vulnerabilities[{{@index}}].timing" class="select-sm timing-select" title="When to apply">
+                    <option value="before" {{#if (eq timing "before")}}selected{{/if}}>Before Damage</option>
+                    <option value="after" {{#if (eq timing "after")}}selected{{/if}}>After Damage</option>
+                  </select>
+                  <label class="checkbox-inline" title="Allow stacking (if off, refreshes duration instead)">
+                    <input type="checkbox" name="combat.vulnerabilities[{{@index}}].stacking" {{#if stacking}}checked{{/if}} />
+                    <span>Stacks</span>
+                  </label>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addVulnerability" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Vulnerability
+            </button>
+          </div>
+        </div>
+
+        <!-- RESTORATION -->
+        <div class="combat-section collapsible {{#if expandedSections.restoration}}expanded{{/if}}" data-section="restoration">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-heart"></i>
+            <span>Restoration</span>
+            <span class="section-count">{{#if combat.restoration.length}}({{combat.restoration.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-restoration-list">
+              {{#each combat.restoration}}
+              <div class="combat-component-row combat-restoration-row" data-index="{{@index}}" data-restoration-type="{{type}}">
+                <select name="combat.restoration[{{@index}}].type" class="restoration-type-select">
+                  <option value="heal-hp" {{#if (eq type "heal-hp")}}selected{{/if}}>Heal HP</option>
+                  <option value="restore-fp" {{#if (eq type "restore-fp")}}selected{{/if}}>Restore FP</option>
+                  <option value="restore-ap" {{#if (eq type "restore-ap")}}selected{{/if}}>Restore AP</option>
+                  <option value="reduce-buildup" {{#if (eq type "reduce-buildup")}}selected{{/if}}>Reduce Buildup</option>
+                  <option value="cure-condition" {{#if (eq type "cure-condition")}}selected{{/if}}>Cure Condition</option>
+                  <option value="cure-effect" {{#if (eq type "cure-effect")}}selected{{/if}}>Cure Effect</option>
+                </select>
+
+                <!-- Fields for heal-hp, restore-fp, restore-ap -->
+                <div class="restoration-dice-fields" style="{{#if (or (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}">
+                  <input type="number" name="combat.restoration[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="Dice" class="input-sm" title="Number of dice" />
+                  <span>d</span>
+                  <select name="combat.restoration[{{@index}}].diceSides" class="select-sm" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <input type="number" name="combat.restoration[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="+ Flat" class="input-sm" title="Flat bonus added to roll" />
+                  <span class="field-label">Scaling:</span>
+                  {{!-- Same scaling dropdown for both player and monster: None or Manual --}}
+                  <select name="combat.restoration[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="manual" {{#if (eq scalingSource "manual")}}selected{{/if}}>Manual</option>
+                  </select>
+                </div>
+
+                {{!-- Manual Scaling Entries for restoration --}}
+                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="restoration" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                  {{!-- Header labels for scaling columns --}}
+                  <div class="manual-scaling-header">
+                    {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}
+                    <span class="scaling-header-label grade-label">Grade</span>
+                    <span class="scaling-header-label stat-label">Stat</span>
+                    <span class="scaling-header-label fraction-label">Fraction</span>
+                  </div>
+                  <div class="manual-scaling-entries">
+                    {{#each manualScalingEntries}}
+                    <div class="manual-scaling-row" data-entry-index="{{@index}}" data-stat="{{stat}}">
+                      {{#if ../../isNPC}}
+                      {{!-- Monster: Show mode dropdown (Graded/Flat) --}}
+                      <select name="combat.restoration[{{@../index}}].manualScalingEntries[{{@index}}].mode" class="select-sm scaling-mode-select" title="Scaling mode">
+                        <option value="graded" {{#if (eq mode "graded")}}selected{{/if}}>Grade × Mod</option>
+                        <option value="flat" {{#if (eq mode "flat")}}selected{{/if}}>Stat Value</option>
+                      </select>
+                      {{else}}
+                      {{!-- Player: Always graded, no mode dropdown --}}
+                      <input type="hidden" name="combat.restoration[{{@../index}}].manualScalingEntries[{{@index}}].mode" value="graded" />
+                      {{/if}}
+                      {{!-- Grade dropdown - hidden for monsters when mode is 'flat' --}}
+                      <select name="combat.restoration[{{@../index}}].manualScalingEntries[{{@index}}].grade" class="select-sm scaling-grade-select {{#if (and ../../isNPC (eq mode 'flat'))}}hidden{{/if}}" title="Grade multiplier (E=0.5, D=1, C=1.5, B=2, A=2.5, S=3, SS=4, SSS=5)">
+                        <option value="E" {{#if (eq grade "E")}}selected{{/if}}>E</option>
+                        <option value="D" {{#if (eq grade "D")}}selected{{/if}}>D</option>
+                        <option value="C" {{#if (eq grade "C")}}selected{{/if}}>C</option>
+                        <option value="B" {{#if (eq grade "B")}}selected{{/if}}>B</option>
+                        <option value="A" {{#if (eq grade "A")}}selected{{/if}}>A</option>
+                        <option value="S" {{#if (eq grade "S")}}selected{{/if}}>S</option>
+                        <option value="SS" {{#if (eq grade "SS")}}selected{{/if}}>SS</option>
+                        <option value="SSS" {{#if (eq grade "SSS")}}selected{{/if}}>SSS</option>
+                      </select>
+                      <select name="combat.restoration[{{@../index}}].manualScalingEntries[{{@index}}].stat" class="select-sm scaling-stat-select" title="{{#if (and ../../isNPC (eq mode 'flat'))}}Uses raw stat value{{else}}Uses stat modifier{{/if}}">
+                        <option value="vitality" {{#if (eq stat "vitality")}}selected{{/if}}>VIT</option>
+                        <option value="endurance" {{#if (eq stat "endurance")}}selected{{/if}}>END</option>
+                        <option value="strength" {{#if (eq stat "strength")}}selected{{/if}}>STR</option>
+                        <option value="dexterity" {{#if (eq stat "dexterity")}}selected{{/if}}>DEX</option>
+                        <option value="attunement" {{#if (eq stat "attunement")}}selected{{/if}}>ATT</option>
+                        <option value="intelligence" {{#if (eq stat "intelligence")}}selected{{/if}}>INT</option>
+                        <option value="faith" {{#if (eq stat "faith")}}selected{{/if}}>FAI</option>
+                      </select>
+                      <select name="combat.restoration[{{@../index}}].manualScalingEntries[{{@index}}].fraction" class="select-sm scaling-fraction-select" title="Fraction of scaling">
+                        <option value="full" {{#if (eq fraction "full")}}selected{{/if}}>Full</option>
+                        <option value="half" {{#if (eq fraction "half")}}selected{{/if}}>Half</option>
+                        <option value="third" {{#if (eq fraction "third")}}selected{{/if}}>Third</option>
+                        <option value="quarter" {{#if (eq fraction "quarter")}}selected{{/if}}>Quarter</option>
+                      </select>
+                      <button type="button" data-action="removeManualScaling" data-component="restoration" data-component-index="{{@../index}}" data-entry-index="{{@index}}" class="remove-btn scaling-remove-btn" title="Remove scaling entry">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
+                    {{/each}}
+                  </div>
+                  <button type="button" data-action="addManualScaling" data-component="restoration" data-component-index="{{@index}}" class="add-scaling-btn" title="Add scaling entry">
+                    <i class="fa-solid fa-plus"></i> Add Scaling
+                  </button>
+                </div>
+
+                <!-- Allow Over Max checkbox for heal/restore types -->
+                <label class="checkbox-inline restoration-overmax" style="{{#if (or (eq type "reduce-buildup") (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}" title="Allow healing/restoring past maximum">
+                  <input type="checkbox" name="combat.restoration[{{@index}}].allowOverMax" {{#if allowOverMax}}checked{{/if}} />
+                  <span>Over Max</span>
+                </label>
+
+                <!-- Status effect dropdown for reduce-buildup -->
+                <select name="combat.restoration[{{@index}}].statusEffect" class="restoration-buildup-target" style="{{#unless (eq type "reduce-buildup")}}display:none{{/unless}}">
+                  <option value="Bleed" {{#if (eq statusEffect "Bleed")}}selected{{/if}}>Bleed</option>
+                  <option value="Poison" {{#if (eq statusEffect "Poison")}}selected{{/if}}>Poison</option>
+                  <option value="Toxic" {{#if (eq statusEffect "Toxic")}}selected{{/if}}>Toxic</option>
+                  <option value="Frost" {{#if (eq statusEffect "Frost")}}selected{{/if}}>Frost</option>
+                  <option value="Curse" {{#if (eq statusEffect "Curse")}}selected{{/if}}>Curse</option>
+                  <option value="Poise" {{#if (eq statusEffect "Poise")}}selected{{/if}}>Poise</option>
+                </select>
+
+                <!-- Condition checkboxes for cure-condition -->
+                <div class="restoration-cure-conditions" style="{{#unless (eq type "cure-condition")}}display:none{{/unless}}">
+                  {{#each ../conditionOptions}}
+                  <label class="checkbox-inline checkbox-sm">
+                    <input type="checkbox" name="combat.restoration[{{@../index}}].conditions[]" value="{{this}}" {{#if (includes ../conditions this)}}checked{{/if}} />
+                    <span>{{this}}</span>
+                  </label>
+                  {{/each}}
+                </div>
+
+                <!-- Effect checkboxes for cure-effect -->
+                <div class="restoration-cure-effects" style="{{#unless (eq type "cure-effect")}}display:none{{/unless}}">
+                  {{#each ../effectOptions}}
+                  <label class="checkbox-inline checkbox-sm">
+                    <input type="checkbox" name="combat.restoration[{{@../index}}].statusEffects[]" value="{{this}}" {{#if (includes ../statusEffects this)}}checked{{/if}} />
+                    <span>{{this}}</span>
+                  </label>
+                  {{/each}}
+                </div>
+
+                <button type="button" data-action="removeRestoration" data-index="{{@index}}" class="remove-btn">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addRestoration" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Restoration
+            </button>
+          </div>
+        </div>
+
+        <!-- CF4: PROTECTION SECTION -->
+        <div class="combat-section collapsible {{#if expandedSections.protection}}expanded{{/if}}" data-section="protection">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Protection</span>
+            <span class="section-count">{{#if (or combat.damageProtection.length combat.buildupProtection.length combat.conditionProtection.length)}}({{sum combat.damageProtection.length combat.buildupProtection.length combat.conditionProtection.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <p class="section-hint">Grant damage reduction, status resistance, or condition immunity to targets.</p>
+
+            <!-- Damage Protection Sub-section -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Damage Protection</div>
+              <div class="combat-protection-list damage-protection-list">
+                {{#each combat.damageProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Type:</span>
+                    <select name="combat.damageProtection[{{@index}}].type" class="protection-type-select">
+                      <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                      <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                      <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                      <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                      <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                    </select>
+                    <span class="field-label">Tiers:</span>
+                    <input type="number" name="combat.damageProtection[{{@index}}].tiers" value="{{tiers}}" min="0" max="8" class="input-compact" title="Resistance tiers" />
+                    <span class="field-label">Flat:</span>
+                    <input type="number" name="combat.damageProtection[{{@index}}].flat" value="{{flat}}" min="0" class="input-compact" title="Flat reduction" />
+                    <span class="field-label">Percentage:</span>
+                    <input type="number" name="combat.damageProtection[{{@index}}].percentage" value="{{percentage}}" min="0" max="100" step="1" class="input-compact" title="Percentage reduction (0-100)" />
+                    <button type="button" data-action="removeDamageProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-duration">
+                    <span class="field-label">Duration:</span>
+                    <span class="field-hint">Turns:</span>
+                    <input type="number" name="combat.damageProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Duration in turns" />
+                    <span class="field-hint">Hits:</span>
+                    <input type="number" name="combat.damageProtection[{{@index}}].durationAttacks" value="{{durationAttacks}}" min="0" class="input-compact" title="Duration in hits taken" />
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <span class="field-label">Timing:</span>
+                    <select name="combat.damageProtection[{{@index}}].percentageTiming" class="input-compact" title="When to apply percentage reduction">
+                      <option value="INITIAL" {{#if (eq percentageTiming "INITIAL")}}selected{{/if}}>Before Reductions</option>
+                      <option value="FINAL" {{#if (eq percentageTiming "FINAL")}}selected{{/if}}>After Reductions</option>
+                    </select>
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="combat.damageProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="combat.damageProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addDamageProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Damage Protection
+              </button>
+            </div>
+
+            <!-- Buildup Protection Sub-section -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Buildup Protection</div>
+              <div class="combat-protection-list buildup-protection-list">
+                {{#each combat.buildupProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Type:</span>
+                    <select name="combat.buildupProtection[{{@index}}].type" class="protection-buildup-select">
+                      <option value="BLEED" {{#if (eq type "BLEED")}}selected{{/if}}>Bleed</option>
+                      <option value="POISON" {{#if (eq type "POISON")}}selected{{/if}}>Poison</option>
+                      <option value="TOXIC" {{#if (eq type "TOXIC")}}selected{{/if}}>Toxic</option>
+                      <option value="FROST" {{#if (eq type "FROST")}}selected{{/if}}>Frost</option>
+                      <option value="CURSE" {{#if (eq type "CURSE")}}selected{{/if}}>Curse</option>
+                      <option value="POISE" {{#if (eq type "POISE")}}selected{{/if}}>Poise</option>
+                    </select>
+                    <span class="field-label">Flat:</span>
+                    <input type="number" name="combat.buildupProtection[{{@index}}].flat" value="{{flat}}" min="0" class="input-compact" title="Flat buildup reduction" />
+                    <span class="field-label">%:</span>
+                    <input type="number" name="combat.buildupProtection[{{@index}}].percentage" value="{{percentage}}" min="0" max="100" class="input-compact" title="Percentage reduction" />
+                    <button type="button" data-action="removeBuildupProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <span class="field-label">Duration:</span>
+                    <input type="number" name="combat.buildupProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Turns" />
+                    <span class="field-hint">turns</span>
+                    <input type="number" name="combat.buildupProtection[{{@index}}].durationAttacks" value="{{durationAttacks}}" min="0" class="input-compact" title="Attacks" />
+                    <span class="field-hint">hits</span>
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="combat.buildupProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="combat.buildupProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addBuildupProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Buildup Protection
+              </button>
+            </div>
+
+            <!-- Condition Protection Sub-section -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Condition Immunity</div>
+              <div class="combat-protection-list condition-protection-list">
+                {{#each combat.conditionProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Condition:</span>
+                    <select name="combat.conditionProtection[{{@index}}].condition" class="protection-condition-select">
+                      <option value="Dazed" {{#if (eq condition "Dazed")}}selected{{/if}}>Dazed</option>
+                      <option value="Grappled" {{#if (eq condition "Grappled")}}selected{{/if}}>Grappled</option>
+                      <option value="Restrained" {{#if (eq condition "Restrained")}}selected{{/if}}>Restrained</option>
+                      <option value="Prone" {{#if (eq condition "Prone")}}selected{{/if}}>Prone</option>
+                      <option value="Staggered" {{#if (eq condition "Staggered")}}selected{{/if}}>Staggered</option>
+                      <option value="LockedUp" {{#if (eq condition "LockedUp")}}selected{{/if}}>Locked Up</option>
+                      <option value="ImpairedVision" {{#if (eq condition "ImpairedVision")}}selected{{/if}}>Impaired Vision</option>
+                      <option value="Deafened" {{#if (eq condition "Deafened")}}selected{{/if}}>Deafened</option>
+                      <option value="Frenzy" {{#if (eq condition "Frenzy")}}selected{{/if}}>Frenzy</option>
+                      <option value="Berserk" {{#if (eq condition "Berserk")}}selected{{/if}}>Berserk</option>
+                    </select>
+                    <span class="field-label">Duration:</span>
+                    <input type="number" name="combat.conditionProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Turns" />
+                    <span class="field-hint">turns</span>
+                    <button type="button" data-action="removeConditionProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="combat.conditionProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="combat.conditionProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addConditionProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Condition Immunity
+              </button>
+            </div>
+          </div>
+        </div>
+        </div><!-- /primary effects tab -->
+
+        <!-- SECONDARY EFFECTS TAB -->
+        <div class="combat-effects-tab {{#if (eq activeCombatTab 'secondary')}}active{{/if}}" data-combat-tab="secondary">
+          <div class="trigger-on-cast-option">
+            <label class="checkbox-label">
+              <input type="checkbox" name="secondaryCombat.triggerOnCast" {{#if secondaryCombat.triggerOnCast}}checked{{/if}} />
+              <span>Trigger on cast</span>
+            </label>
+          </div>
+
+        <!-- SECONDARY DAMAGE TYPES -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryDamageTypes}}expanded{{/if}}" data-section="secondaryDamageTypes">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-burst"></i>
+            <span>Damage Types</span>
+            <span class="section-count">{{#if secondaryCombat.damageTypes.length}}({{secondaryCombat.damageTypes.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-damage-list">
+              {{#each secondaryCombat.damageTypes}}
+              <div class="combat-damage-item {{#if piercing.expanded}}piercing-expanded{{/if}}" data-index="{{@index}}">
+                <!-- Row 1: Type & Dice -->
+                <div class="combat-component-row damage-row-main">
+                  <span class="field-label">Type:</span>
+                  <select name="secondaryCombat.damageTypes[{{@index}}].type" class="damage-type-select">
+                    <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                    <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                    <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                    <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                    <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                    <option value="TRUE" {{#if (eq type "TRUE")}}selected{{/if}}>True</option>
+                    <option value="FP" {{#if (eq type "FP")}}selected{{/if}}>FP Drain</option>
+                    <option value="AP" {{#if (eq type "AP")}}selected{{/if}}>AP Drain</option>
+                  </select>
+                  <span class="field-label">Dice:</span>
+                  <input type="number" name="secondaryCombat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="1" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <span class="dice-d">d</span>
+                  <select name="secondaryCombat.damageTypes[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <span class="field-label">+</span>
+                  <input type="number" name="secondaryCombat.damageTypes[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="0" class="input-flat-bonus" title="Flat bonus added to roll" />
+                  <button type="button" data-action="removeDamageType" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Scaling & Piercing Toggle -->
+                <div class="combat-component-row damage-row-options">
+                  <span class="field-label">Scaling:</span>
+                  {{#if ../isNPC}}
+                  {{!-- NPC/Monster: Show stat scaling options --}}
+                  <select name="secondaryCombat.damageTypes[{{@index}}].scalingSource" class="select-sm scaling-source-select monster-scaling" title="Stat scaling source">
+                    {{#each ../monsterScalingSources}}
+                    <option value="{{value}}" {{#if (eq ../scalingSource value)}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                  </select>
+                  {{else}}
+                  {{!-- Player: Show weapon scaling options --}}
+                  <select name="secondaryCombat.damageTypes[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="weapon" {{#if (eq scalingSource "weapon")}}selected{{/if}}>Weapon</option>
+                  </select>
+                  <select name="secondaryCombat.damageTypes[{{@index}}].weaponHand" class="select-sm weapon-hand-select" title="Which weapon's scaling" style="{{#unless (eq scalingSource 'weapon')}}display:none{{/unless}}">
+                    <option value="mainHand" {{#if (eq weaponHand "mainHand")}}selected{{/if}}>Main</option>
+                    <option value="offHand" {{#if (eq weaponHand "offHand")}}selected{{/if}}>Off</option>
+                  </select>
+                  {{/if}}
+                  {{!-- Piercing button - hidden via JS for TRUE, FP, AP (they bypass resistance) --}}
+                  <button type="button" data-action="togglePiercing" data-index="{{@index}}" data-secondary="true" class="piercing-toggle-btn {{#if (or piercing.tiers piercing.allTiers)}}has-piercing{{/if}} {{#if (or (eq type 'TRUE') (eq type 'FP') (eq type 'AP'))}}hidden{{/if}}" title="Piercing options">
+                    <i class="fa-solid fa-crosshairs"></i> Piercing
+                  </button>
+                </div>
+                {{!-- Row 3: Piercing Details (expandable) - hidden via JS for TRUE, FP, AP --}}
+                <div class="piercing-row {{#unless piercing.expanded}}hidden{{/unless}} {{#if (or (eq type 'TRUE') (eq type 'FP') (eq type 'AP'))}}no-piercing{{/if}}">
+                  <span class="field-label">Tiers:</span>
+                  <select name="secondaryCombat.damageTypes[{{@index}}].piercing.tiers" class="select-piercing-tiers" title="Piercing tiers" {{#if piercing.allTiers}}disabled{{/if}}>
+                    <option value="0" {{#if (eq piercing.tiers 0)}}selected{{/if}}>0</option>
+                    <option value="1" {{#if (eq piercing.tiers 1)}}selected{{/if}}>1</option>
+                    <option value="2" {{#if (eq piercing.tiers 2)}}selected{{/if}}>2</option>
+                    <option value="3" {{#if (eq piercing.tiers 3)}}selected{{/if}}>3</option>
+                    <option value="4" {{#if (eq piercing.tiers 4)}}selected{{/if}}>4</option>
+                  </select>
+                  <label class="checkbox-label piercing-all-label">
+                    <input type="checkbox" name="secondaryCombat.damageTypes[{{@index}}].piercing.allTiers" class="piercing-all-checkbox" {{#if piercing.allTiers}}checked{{/if}} />
+                    <span>Ignore All</span>
+                  </label>
+                  <span class="piercing-hint">Reduces target resistance</span>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addDamageType" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Damage
+            </button>
+          </div>
+        </div>
+
+        <!-- SECONDARY STATUS BUILDUP -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryStatusEffects}}expanded{{/if}}" data-section="secondaryStatusEffects">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-droplet"></i>
+            <span>Status Buildup</span>
+            <span class="section-count">{{#if secondaryCombat.statusEffects.length}}({{secondaryCombat.statusEffects.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-buildup-list">
+              {{#each secondaryCombat.statusEffects}}
+              <div class="combat-buildup-item" data-index="{{@index}}">
+                <!-- Row 1: Effect & Dice -->
+                <div class="combat-component-row buildup-row-main">
+                  <span class="field-label">Effect:</span>
+                  <select name="secondaryCombat.statusEffects[{{@index}}].name" class="buildup-type-select">
+                    <option value="Bleed" {{#if (eq name "Bleed")}}selected{{/if}}>Bleed</option>
+                    <option value="Poison" {{#if (eq name "Poison")}}selected{{/if}}>Poison</option>
+                    <option value="Toxic" {{#if (eq name "Toxic")}}selected{{/if}}>Toxic</option>
+                    <option value="Frost" {{#if (eq name "Frost")}}selected{{/if}}>Frost</option>
+                    <option value="Curse" {{#if (eq name "Curse")}}selected{{/if}}>Curse</option>
+                    <option value="Poise" {{#if (eq name "Poise")}}selected{{/if}}>Poise</option>
+                  </select>
+                  <span class="field-label">Dice:</span>
+                  <input type="number" name="secondaryCombat.statusEffects[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <span class="dice-d">d</span>
+                  <select name="secondaryCombat.statusEffects[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <span class="field-label">+</span>
+                  <input type="number" name="secondaryCombat.statusEffects[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="0" class="input-flat-bonus" title="Flat bonus" />
+                  <button type="button" data-action="removeStatusEffect" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Scaling -->
+                <div class="combat-component-row buildup-row-options">
+                  <span class="field-label">Scaling:</span>
+                  {{#if ../isNPC}}
+                  {{!-- NPC/Monster: Show stat scaling options --}}
+                  <select name="secondaryCombat.statusEffects[{{@index}}].scalingSource" class="select-sm scaling-source-select monster-scaling" title="Stat scaling source">
+                    {{#each ../monsterScalingSources}}
+                    <option value="{{value}}" {{#if (eq ../scalingSource value)}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                  </select>
+                  {{else}}
+                  {{!-- Player: Show weapon scaling options --}}
+                  <select name="secondaryCombat.statusEffects[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="weapon" {{#if (eq scalingSource "weapon")}}selected{{/if}}>Weapon</option>
+                  </select>
+                  <select name="secondaryCombat.statusEffects[{{@index}}].weaponHand" class="select-sm weapon-hand-select" title="Which weapon's scaling" style="{{#unless (eq scalingSource 'weapon')}}display:none{{/unless}}">
+                    <option value="mainHand" {{#if (eq weaponHand "mainHand")}}selected{{/if}}>Main Hand</option>
+                    <option value="offHand" {{#if (eq weaponHand "offHand")}}selected{{/if}}>Off Hand</option>
+                  </select>
+                  {{/if}}
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addStatusEffect" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Buildup
+            </button>
+          </div>
+        </div>
+
+        <!-- SECONDARY STATUS CONDITIONS -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryStatusConditions}}expanded{{/if}}" data-section="secondaryStatusConditions">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-bolt"></i>
+            <span>Status Conditions</span>
+            <span class="section-count">{{#if secondaryCombat.statusConditions.length}}({{secondaryCombat.statusConditions.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-condition-list">
+              {{#each secondaryCombat.statusConditions}}
+              <div class="combat-condition-item" data-index="{{@index}}">
+                <!-- Row 1: Condition & Duration -->
+                <div class="combat-component-row condition-row-main">
+                  <span class="field-label">Condition:</span>
+                  <select name="secondaryCombat.statusConditions[{{@index}}].name" class="condition-type-select">
+                    {{#each ../conditionOptions}}
+                    <option value="{{this}}" {{#if (eq this ../name)}}selected{{/if}}>{{this}}</option>
+                    {{/each}}
+                  </select>
+                  <span class="field-label">Rounds:</span>
+                  <input type="number" name="secondaryCombat.statusConditions[{{@index}}].duration" value="{{duration}}" min="0" placeholder="∞" class="input-compact" title="Duration in rounds (empty = indefinite)" />
+                  <button type="button" data-action="removeStatusCondition" data-index="{{@index}}" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Save Options -->
+                <div class="combat-component-row condition-row-options">
+                  <label class="checkbox-label no-save-toggle" title="No save allowed - condition auto-applies (pending GM ruling)">
+                    <input type="checkbox" name="secondaryCombat.statusConditions[{{@index}}].noSave" {{#if noSave}}checked{{/if}} />
+                    <span>No Save</span>
+                  </label>
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">DC:</span>
+                  <input type="number" name="secondaryCombat.statusConditions[{{@index}}].dc" value="{{dc}}" min="1" placeholder="--" class="input-compact save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="Save DC" />
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">+</span>
+                  <select name="secondaryCombat.statusConditions[{{@index}}].dcBonusSource" class="select-sm save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="DC bonus source">
+                    <option value="none" {{#if (eq dcBonusSource "none")}}selected{{/if}}>None</option>
+                    <option value="weaponScaling" {{#if (eq dcBonusSource "weaponScaling")}}selected{{/if}}>Wpn</option>
+                    {{#each ../dcBonusSources}}
+                    <option value="{{value}}" {{#if (eq value ../dcBonusSource)}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                  </select>
+                  <span class="field-label save-dc-label {{#if noSave}}disabled{{/if}}">Check:</span>
+                  <select name="secondaryCombat.statusConditions[{{@index}}].saveType" class="select-sm save-dc-input {{#if noSave}}disabled{{/if}}" {{#if noSave}}disabled{{/if}} title="What check target rolls">
+                    <option value="" {{#unless saveType}}selected{{/unless}}>--</option>
+                    <optgroup label="Stats">
+                      <option value="stat:vitality" {{#if (eq saveType "stat:vitality")}}selected{{/if}}>Vitality</option>
+                      <option value="stat:endurance" {{#if (eq saveType "stat:endurance")}}selected{{/if}}>Endurance</option>
+                      <option value="stat:strength" {{#if (eq saveType "stat:strength")}}selected{{/if}}>Strength</option>
+                      <option value="stat:dexterity" {{#if (eq saveType "stat:dexterity")}}selected{{/if}}>Dexterity</option>
+                      <option value="stat:attunement" {{#if (eq saveType "stat:attunement")}}selected{{/if}}>Attunement</option>
+                      <option value="stat:intelligence" {{#if (eq saveType "stat:intelligence")}}selected{{/if}}>Intelligence</option>
+                      <option value="stat:faith" {{#if (eq saveType "stat:faith")}}selected{{/if}}>Faith</option>
+                    </optgroup>
+                    <optgroup label="Skills">
+                      <option value="skill:Athletics" {{#if (eq saveType "skill:Athletics")}}selected{{/if}}>Athletics</option>
+                      <option value="skill:Acrobatics" {{#if (eq saveType "skill:Acrobatics")}}selected{{/if}}>Acrobatics</option>
+                      <option value="skill:Perception" {{#if (eq saveType "skill:Perception")}}selected{{/if}}>Perception</option>
+                      <option value="skill:FireKeeping" {{#if (eq saveType "skill:FireKeeping")}}selected{{/if}}>Fire Keeping</option>
+                      <option value="skill:Sanity" {{#if (eq saveType "skill:Sanity")}}selected{{/if}}>Sanity</option>
+                      <option value="skill:Stealth" {{#if (eq saveType "skill:Stealth")}}selected{{/if}}>Stealth</option>
+                      <option value="skill:Precision" {{#if (eq saveType "skill:Precision")}}selected{{/if}}>Precision</option>
+                      <option value="skill:Diplomacy" {{#if (eq saveType "skill:Diplomacy")}}selected{{/if}}>Diplomacy</option>
+                    </optgroup>
+                    <optgroup label="Knowledge">
+                      <option value="knowledge:Magics" {{#if (eq saveType "knowledge:Magics")}}selected{{/if}}>Magics</option>
+                      <option value="knowledge:WorldHistory" {{#if (eq saveType "knowledge:WorldHistory")}}selected{{/if}}>World History</option>
+                      <option value="knowledge:Monsters" {{#if (eq saveType "knowledge:Monsters")}}selected{{/if}}>Monsters</option>
+                      <option value="knowledge:Cosmic" {{#if (eq saveType "knowledge:Cosmic")}}selected{{/if}}>Cosmic</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <!-- Row 3: Stacks (only for Frenzy/Exhaustion) -->
+                <div class="combat-component-row condition-row-stacks {{#unless (or (eq name "Frenzy") (eq name "Exhaustion"))}}hidden{{/unless}}">
+                  <span class="field-label">Stacks:</span>
+                  <input type="number" name="secondaryCombat.statusConditions[{{@index}}].stacks" value="{{stacks}}" min="1" class="input-compact" title="Number of stacks to apply" />
+                  <label class="checkbox-inline" title="If checked, stacks are added to existing. If unchecked, replaces existing stacks.">
+                    <input type="checkbox" name="secondaryCombat.statusConditions[{{@index}}].stacking" {{#if stacking}}checked{{/if}} />
+                    <span>Stacks</span>
+                  </label>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addStatusCondition" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Condition
+            </button>
+          </div>
+        </div>
+
+        <!-- SECONDARY VULNERABILITIES -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryVulnerabilities}}expanded{{/if}}" data-section="secondaryVulnerabilities">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-shield-xmark"></i>
+            <span>Vulnerabilities</span>
+            <span class="section-count">{{#if secondaryCombat.vulnerabilities.length}}({{secondaryCombat.vulnerabilities.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <p class="section-hint">Apply resistance reduction to targets. Can reduce below 0.</p>
+            <div class="combat-vulnerability-list">
+              {{#each secondaryCombat.vulnerabilities}}
+              <div class="combat-vulnerability-item" data-index="{{@index}}">
+                <!-- Row 1: Type & Values -->
+                <div class="combat-component-row vuln-row-main">
+                  <span class="field-label">Type:</span>
+                  <select name="secondaryCombat.vulnerabilities[{{@index}}].type" class="vulnerability-type-select">
+                    <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                    <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                    <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                    <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                    <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                  </select>
+                  <span class="field-label">Tiers:</span>
+                  <input type="number" name="secondaryCombat.vulnerabilities[{{@index}}].tiers" value="{{tiers}}" min="0" max="8" class="input-compact" title="Tier reduction" />
+                  <span class="field-label">Rounds:</span>
+                  <input type="number" name="secondaryCombat.vulnerabilities[{{@index}}].duration" value="{{duration}}" min="1" class="input-compact" title="Duration in rounds" />
+                  <button type="button" data-action="removeVulnerability" data-index="{{@index}}" data-secondary="true" class="remove-btn">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Row 2: Options -->
+                <div class="combat-component-row vuln-row-options">
+                  <span class="field-label">Timing:</span>
+                  <select name="secondaryCombat.vulnerabilities[{{@index}}].timing" class="select-sm timing-select" title="When to apply">
+                    <option value="before" {{#if (eq timing "before")}}selected{{/if}}>Before Damage</option>
+                    <option value="after" {{#if (eq timing "after")}}selected{{/if}}>After Damage</option>
+                  </select>
+                  <label class="checkbox-inline" title="Allow stacking (if off, refreshes duration instead)">
+                    <input type="checkbox" name="secondaryCombat.vulnerabilities[{{@index}}].stacking" {{#if stacking}}checked{{/if}} />
+                    <span>Stacks</span>
+                  </label>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addVulnerability" data-secondary="true" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Vulnerability
+            </button>
+          </div>
+        </div>
+
+        <!-- SECONDARY RESTORATION -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryRestoration}}expanded{{/if}}" data-section="secondaryRestoration">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-heart"></i>
+            <span>Restoration</span>
+            <span class="section-count">{{#if secondaryCombat.restoration.length}}({{secondaryCombat.restoration.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <div class="combat-restoration-list">
+              {{#each secondaryCombat.restoration}}
+              <div class="combat-component-row combat-restoration-row" data-index="{{@index}}" data-restoration-type="{{type}}">
+                <select name="secondaryCombat.restoration[{{@index}}].type" class="restoration-type-select">
+                  <option value="heal-hp" {{#if (eq type "heal-hp")}}selected{{/if}}>Heal HP</option>
+                  <option value="restore-fp" {{#if (eq type "restore-fp")}}selected{{/if}}>Restore FP</option>
+                  <option value="restore-ap" {{#if (eq type "restore-ap")}}selected{{/if}}>Restore AP</option>
+                  <option value="reduce-buildup" {{#if (eq type "reduce-buildup")}}selected{{/if}}>Reduce Buildup</option>
+                  <option value="cure-condition" {{#if (eq type "cure-condition")}}selected{{/if}}>Cure Condition</option>
+                  <option value="cure-effect" {{#if (eq type "cure-effect")}}selected{{/if}}>Cure Effect</option>
+                </select>
+
+                <div class="restoration-dice-fields" style="{{#if (or (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}">
+                  <input type="number" name="secondaryCombat.restoration[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="Dice" class="input-sm" title="Number of dice" />
+                  <span>d</span>
+                  <select name="secondaryCombat.restoration[{{@index}}].diceSides" class="select-sm" title="Die size">
+                    <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
+                    <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
+                    <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
+                    <option value="8" {{#if (eq diceSides 8)}}selected{{/if}}>8</option>
+                    <option value="10" {{#if (eq diceSides 10)}}selected{{/if}}>10</option>
+                    <option value="12" {{#if (eq diceSides 12)}}selected{{/if}}>12</option>
+                    <option value="20" {{#if (eq diceSides 20)}}selected{{/if}}>20</option>
+                    <option value="100" {{#if (eq diceSides 100)}}selected{{/if}}>100</option>
+                  </select>
+                  <input type="number" name="secondaryCombat.restoration[{{@index}}].flatBonus" value="{{flatBonus}}" placeholder="+ Flat" class="input-sm" title="Flat bonus added to roll" />
+                  <span class="field-label">Scaling:</span>
+                  {{#if ../isNPC}}
+                  {{!-- NPC/Monster: Show stat scaling options --}}
+                  <select name="secondaryCombat.restoration[{{@index}}].scalingSource" class="select-sm scaling-source-select monster-scaling" title="Stat scaling source">
+                    {{#each ../monsterScalingSources}}
+                    <option value="{{value}}" {{#if (eq ../scalingSource value)}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                  </select>
+                  {{else}}
+                  {{!-- Player: Show weapon scaling options --}}
+                  <select name="secondaryCombat.restoration[{{@index}}].scalingSource" class="select-sm scaling-source-select" title="Scaling source">
+                    <option value="none" {{#if (eq scalingSource "none")}}selected{{/if}}>None</option>
+                    <option value="weapon" {{#if (eq scalingSource "weapon")}}selected{{/if}}>Weapon</option>
+                  </select>
+                  <select name="secondaryCombat.restoration[{{@index}}].weaponHand" class="select-sm weapon-hand-select" title="Which weapon's scaling" style="{{#unless (eq scalingSource 'weapon')}}display:none{{/unless}}">
+                    <option value="mainHand" {{#if (eq weaponHand "mainHand")}}selected{{/if}}>Main Hand</option>
+                    <option value="offHand" {{#if (eq weaponHand "offHand")}}selected{{/if}}>Off Hand</option>
+                  </select>
+                  {{/if}}
+                </div>
+
+                <label class="checkbox-inline restoration-overmax" style="{{#if (or (eq type "reduce-buildup") (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}" title="Allow healing/restoring past maximum">
+                  <input type="checkbox" name="secondaryCombat.restoration[{{@index}}].allowOverMax" {{#if allowOverMax}}checked{{/if}} />
+                  <span>Over Max</span>
+                </label>
+
+                <select name="secondaryCombat.restoration[{{@index}}].statusEffect" class="restoration-buildup-target" style="{{#unless (eq type "reduce-buildup")}}display:none{{/unless}}">
+                  <option value="Bleed" {{#if (eq statusEffect "Bleed")}}selected{{/if}}>Bleed</option>
+                  <option value="Poison" {{#if (eq statusEffect "Poison")}}selected{{/if}}>Poison</option>
+                  <option value="Toxic" {{#if (eq statusEffect "Toxic")}}selected{{/if}}>Toxic</option>
+                  <option value="Frost" {{#if (eq statusEffect "Frost")}}selected{{/if}}>Frost</option>
+                  <option value="Curse" {{#if (eq statusEffect "Curse")}}selected{{/if}}>Curse</option>
+                  <option value="Poise" {{#if (eq statusEffect "Poise")}}selected{{/if}}>Poise</option>
+                </select>
+
+                <div class="restoration-cure-conditions" style="{{#unless (eq type "cure-condition")}}display:none{{/unless}}">
+                  {{#each ../conditionOptions}}
+                  <label class="checkbox-inline checkbox-sm">
+                    <input type="checkbox" name="secondaryCombat.restoration[{{@../index}}].conditions[]" value="{{this}}" {{#if (includes ../conditions this)}}checked{{/if}} />
+                    <span>{{this}}</span>
+                  </label>
+                  {{/each}}
+                </div>
+
+                <div class="restoration-cure-effects" style="{{#unless (eq type "cure-effect")}}display:none{{/unless}}">
+                  {{#each ../effectOptions}}
+                  <label class="checkbox-inline checkbox-sm">
+                    <input type="checkbox" name="secondaryCombat.restoration[{{@../index}}].statusEffects[]" value="{{this}}" {{#if (includes ../statusEffects this)}}checked{{/if}} />
+                    <span>{{this}}</span>
+                  </label>
+                  {{/each}}
+                </div>
+
+                <button type="button" data-action="removeRestoration" data-index="{{@index}}" class="remove-btn">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+              {{/each}}
+            </div>
+            <button type="button" data-action="addRestoration" class="add-component-btn">
+              <i class="fa-solid fa-plus"></i> Add Restoration
+            </button>
+          </div>
+        </div>
+
+        <!-- CF4: SECONDARY PROTECTION SECTION -->
+        <div class="combat-section collapsible {{#if expandedSections.secondaryProtection}}expanded{{/if}}" data-section="secondaryProtection">
+          <div class="combat-section-header" data-action="toggleCombatSection">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Protection</span>
+            <span class="section-count">{{#if (or secondaryCombat.damageProtection.length secondaryCombat.buildupProtection.length secondaryCombat.conditionProtection.length)}}({{sum secondaryCombat.damageProtection.length secondaryCombat.buildupProtection.length secondaryCombat.conditionProtection.length}}){{/if}}</span>
+            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+          </div>
+          <div class="combat-section-body">
+            <p class="section-hint">Grant damage reduction, status resistance, or condition immunity to targets.</p>
+
+            <!-- Secondary Damage Protection -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Damage Protection</div>
+              <div class="combat-protection-list damage-protection-list">
+                {{#each secondaryCombat.damageProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Type:</span>
+                    <select name="secondaryCombat.damageProtection[{{@index}}].type" class="protection-type-select">
+                      <option value="PHYSICAL" {{#if (eq type "PHYSICAL")}}selected{{/if}}>Physical</option>
+                      <option value="MAGIC" {{#if (eq type "MAGIC")}}selected{{/if}}>Magic</option>
+                      <option value="FIRE" {{#if (eq type "FIRE")}}selected{{/if}}>Fire</option>
+                      <option value="LIGHTNING" {{#if (eq type "LIGHTNING")}}selected{{/if}}>Lightning</option>
+                      <option value="DARK" {{#if (eq type "DARK")}}selected{{/if}}>Dark</option>
+                    </select>
+                    <span class="field-label">Tiers:</span>
+                    <input type="number" name="secondaryCombat.damageProtection[{{@index}}].tiers" value="{{tiers}}" min="0" max="8" class="input-compact" title="Resistance tiers" />
+                    <span class="field-label">Flat:</span>
+                    <input type="number" name="secondaryCombat.damageProtection[{{@index}}].flat" value="{{flat}}" min="0" class="input-compact" title="Flat reduction" />
+                    <span class="field-label">Percentage:</span>
+                    <input type="number" name="secondaryCombat.damageProtection[{{@index}}].percentage" value="{{percentage}}" min="0" max="100" step="1" class="input-compact" title="Percentage reduction (0-100)" />
+                    <button type="button" data-action="removeDamageProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-duration">
+                    <span class="field-label">Duration:</span>
+                    <span class="field-hint">Turns:</span>
+                    <input type="number" name="secondaryCombat.damageProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Duration in turns" />
+                    <span class="field-hint">Hits:</span>
+                    <input type="number" name="secondaryCombat.damageProtection[{{@index}}].durationAttacks" value="{{durationAttacks}}" min="0" class="input-compact" title="Duration in hits taken" />
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <span class="field-label">Timing:</span>
+                    <select name="secondaryCombat.damageProtection[{{@index}}].percentageTiming" class="input-compact" title="When to apply percentage reduction">
+                      <option value="INITIAL" {{#if (eq percentageTiming "INITIAL")}}selected{{/if}}>Before Reductions</option>
+                      <option value="FINAL" {{#if (eq percentageTiming "FINAL")}}selected{{/if}}>After Reductions</option>
+                    </select>
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="secondaryCombat.damageProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="secondaryCombat.damageProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addDamageProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Damage Protection
+              </button>
+            </div>
+
+            <!-- Secondary Buildup Protection -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Buildup Protection</div>
+              <div class="combat-protection-list buildup-protection-list">
+                {{#each secondaryCombat.buildupProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Type:</span>
+                    <select name="secondaryCombat.buildupProtection[{{@index}}].type" class="protection-buildup-select">
+                      <option value="BLEED" {{#if (eq type "BLEED")}}selected{{/if}}>Bleed</option>
+                      <option value="POISON" {{#if (eq type "POISON")}}selected{{/if}}>Poison</option>
+                      <option value="TOXIC" {{#if (eq type "TOXIC")}}selected{{/if}}>Toxic</option>
+                      <option value="FROST" {{#if (eq type "FROST")}}selected{{/if}}>Frost</option>
+                      <option value="CURSE" {{#if (eq type "CURSE")}}selected{{/if}}>Curse</option>
+                      <option value="POISE" {{#if (eq type "POISE")}}selected{{/if}}>Poise</option>
+                    </select>
+                    <span class="field-label">Flat:</span>
+                    <input type="number" name="secondaryCombat.buildupProtection[{{@index}}].flat" value="{{flat}}" min="0" class="input-compact" title="Flat buildup reduction" />
+                    <span class="field-label">%:</span>
+                    <input type="number" name="secondaryCombat.buildupProtection[{{@index}}].percentage" value="{{percentage}}" min="0" max="100" class="input-compact" title="Percentage reduction" />
+                    <button type="button" data-action="removeBuildupProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <span class="field-label">Duration:</span>
+                    <input type="number" name="secondaryCombat.buildupProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Turns" />
+                    <span class="field-hint">turns</span>
+                    <input type="number" name="secondaryCombat.buildupProtection[{{@index}}].durationAttacks" value="{{durationAttacks}}" min="0" class="input-compact" title="Attacks" />
+                    <span class="field-hint">hits</span>
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="secondaryCombat.buildupProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="secondaryCombat.buildupProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addBuildupProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Buildup Protection
+              </button>
+            </div>
+
+            <!-- Secondary Condition Protection -->
+            <div class="protection-subsection">
+              <div class="protection-subsection-header">Condition Immunity</div>
+              <div class="combat-protection-list condition-protection-list">
+                {{#each secondaryCombat.conditionProtection}}
+                <div class="combat-protection-item" data-index="{{@index}}">
+                  <div class="combat-component-row prot-row-main">
+                    <span class="field-label">Condition:</span>
+                    <select name="secondaryCombat.conditionProtection[{{@index}}].condition" class="protection-condition-select">
+                      <option value="Dazed" {{#if (eq condition "Dazed")}}selected{{/if}}>Dazed</option>
+                      <option value="Grappled" {{#if (eq condition "Grappled")}}selected{{/if}}>Grappled</option>
+                      <option value="Restrained" {{#if (eq condition "Restrained")}}selected{{/if}}>Restrained</option>
+                      <option value="Prone" {{#if (eq condition "Prone")}}selected{{/if}}>Prone</option>
+                      <option value="Staggered" {{#if (eq condition "Staggered")}}selected{{/if}}>Staggered</option>
+                      <option value="LockedUp" {{#if (eq condition "LockedUp")}}selected{{/if}}>Locked Up</option>
+                      <option value="ImpairedVision" {{#if (eq condition "ImpairedVision")}}selected{{/if}}>Impaired Vision</option>
+                      <option value="Deafened" {{#if (eq condition "Deafened")}}selected{{/if}}>Deafened</option>
+                      <option value="Frenzy" {{#if (eq condition "Frenzy")}}selected{{/if}}>Frenzy</option>
+                      <option value="Berserk" {{#if (eq condition "Berserk")}}selected{{/if}}>Berserk</option>
+                    </select>
+                    <span class="field-label">Duration:</span>
+                    <input type="number" name="secondaryCombat.conditionProtection[{{@index}}].durationTurns" value="{{durationTurns}}" min="0" class="input-compact" title="Turns" />
+                    <span class="field-hint">turns</span>
+                    <button type="button" data-action="removeConditionProtection" data-index="{{@index}}" class="remove-btn">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="combat-component-row prot-row-options">
+                    <label class="checkbox-inline" title="Apply to caster">
+                      <input type="checkbox" name="secondaryCombat.conditionProtection[{{@index}}].applyToCaster" {{#if applyToCaster}}checked{{/if}} />
+                      <span>Self</span>
+                    </label>
+                    <label class="checkbox-inline" title="Apply to target">
+                      <input type="checkbox" name="secondaryCombat.conditionProtection[{{@index}}].applyToTarget" {{#if applyToTarget}}checked{{/if}} />
+                      <span>Target</span>
+                    </label>
+                  </div>
+                </div>
+                {{/each}}
+              </div>
+              <button type="button" data-action="addConditionProtection" class="add-component-btn add-subcomponent-btn">
+                <i class="fa-solid fa-plus"></i> Add Condition Immunity
+              </button>
+            </div>
+          </div>
+        </div>
+        </div><!-- /secondary effects tab -->
+        </div><!-- /column-content -->
+      </div><!-- /combat main-tab-content -->
+
+      <!-- ANIMATION CONTENT (shown when Animation tab active) -->
+      <div class="main-tab-content {{#if (eq activeMainTab 'animation')}}active{{/if}}" data-maintab-content="animation">
+        <div class="column-content animation-content">
+          {{#if animationAvailable}}
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="animation.enabled" {{#if animation.enabled}}checked{{/if}} />
+              <span>Enable Animations</span>
+            </label>
+            <p class="hint">Play visual effects when this macro is executed</p>
+          </div>
+
+          <p class="hint animation-targeting-hint">
+            {{#if targeting.isTargetMacro}}
+            Projectile/Impact animations will play toward targets. Area animations play on AoE templates.
+            {{else}}
+            Without targeting enabled, you'll be prompted to select a grid location for projectile/impact/area animations.
+            {{/if}}
+          </p>
+
+          <hr class="animation-divider" />
+
+          <!-- Cast Animation Slot (always visible) -->
+          <div class="animation-slot" data-slot="cast">
+            <div class="animation-slot-header">
+              <i class="fa-solid fa-hand-sparkles"></i>
+              <span>Cast Animation</span>
+            </div>
+            <div class="animation-slot-body">
+              <div class="form-row">
+                <div class="form-group flex-grow">
+                  <label>Animation File</label>
+                  <div class="animation-search-wrapper">
+                    <input type="text" name="animation.cast.file" value="{{animation.cast.file}}" class="animation-file-input" data-slot="cast" placeholder="Click or type to search..." autocomplete="off" />
+                    <div class="animation-dropdown" data-slot="cast"></div>
+                  </div>
+                </div>
+                <button type="button" class="animation-preview-btn" data-slot="cast" title="Preview on selected token">
+                  <i class="fa-solid fa-play"></i>
+                </button>
+              </div>
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Scale</label>
+                  <input type="number" name="animation.cast.scale" value="{{animation.cast.scale}}" min="0.1" max="5" step="0.1" />
+                </div>
+                <div class="form-group half">
+                  <label>Duration (ms)</label>
+                  <input type="text" name="animation.cast.duration" value="{{#if animation.cast.duration}}{{animation.cast.duration}}{{/if}}" placeholder="Auto" title="Duration in milliseconds. Leave empty for auto (plays to completion)." />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Projectile Animation Slot -->
+          <div class="animation-slot" data-slot="projectile">
+            <div class="animation-slot-header">
+              <i class="fa-solid fa-location-arrow"></i>
+              <span>Projectile Animation</span>
+            </div>
+            <div class="animation-slot-body">
+              <div class="form-row">
+                <div class="form-group flex-grow">
+                  <label>Animation File</label>
+                  <div class="animation-search-wrapper">
+                    <input type="text" name="animation.projectile.file" value="{{animation.projectile.file}}" class="animation-file-input" data-slot="projectile" placeholder="Click or type to search..." autocomplete="off" />
+                    <div class="animation-dropdown" data-slot="projectile"></div>
+                  </div>
+                </div>
+                <button type="button" class="animation-preview-btn" data-slot="projectile" title="Preview on selected token">
+                  <i class="fa-solid fa-play"></i>
+                </button>
+              </div>
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Scale</label>
+                  <input type="number" name="animation.projectile.scale" value="{{animation.projectile.scale}}" min="0.1" max="5" step="0.1" />
+                </div>
+                <div class="form-group half">
+                  <label>Duration (ms)</label>
+                  <input type="text" name="animation.projectile.duration" value="{{#if animation.projectile.duration}}{{animation.projectile.duration}}{{/if}}" placeholder="Auto" title="Duration in milliseconds. Leave empty for auto (plays to completion)." />
+                </div>
+              </div>
+              {{#if targeting.isTargetMacro}}
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" name="animation.projectile.simultaneous" {{#if animation.projectile.simultaneous}}checked{{/if}} />
+                  <span>Play for all targets at once</span>
+                </label>
+              </div>
+              {{/if}}
+            </div>
+          </div>
+
+          <!-- Impact Animation Slot -->
+          <div class="animation-slot" data-slot="impact">
+            <div class="animation-slot-header">
+              <i class="fa-solid fa-burst"></i>
+              <span>Impact Animation</span>
+            </div>
+            <div class="animation-slot-body">
+              <div class="form-row">
+                <div class="form-group flex-grow">
+                  <label>Animation File</label>
+                  <div class="animation-search-wrapper">
+                    <input type="text" name="animation.impact.file" value="{{animation.impact.file}}" class="animation-file-input" data-slot="impact" placeholder="Click or type to search..." autocomplete="off" />
+                    <div class="animation-dropdown" data-slot="impact"></div>
+                  </div>
+                </div>
+                <button type="button" class="animation-preview-btn" data-slot="impact" title="Preview on selected token">
+                  <i class="fa-solid fa-play"></i>
+                </button>
+              </div>
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Scale</label>
+                  <input type="number" name="animation.impact.scale" value="{{animation.impact.scale}}" min="0.1" max="5" step="0.1" />
+                </div>
+                <div class="form-group half">
+                  <label>Duration (ms)</label>
+                  <input type="text" name="animation.impact.duration" value="{{#if animation.impact.duration}}{{animation.impact.duration}}{{/if}}" placeholder="Auto" title="Duration in milliseconds. Leave empty for auto (plays to completion)." />
+                </div>
+              </div>
+              {{#if targeting.isTargetMacro}}
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" name="animation.impact.simultaneous" {{#if animation.impact.simultaneous}}checked{{/if}} />
+                  <span>Play for all targets at once</span>
+                </label>
+              </div>
+              {{/if}}
+            </div>
+          </div>
+
+          <!-- Area Animation Slot (only visible when AoE shape is hex or circle) -->
+          <div class="animation-slot" data-slot="area" style="{{#unless (or (eq aoe.shape 'hex') (eq aoe.shape 'circle'))}}display:none{{/unless}}">
+            <div class="animation-slot-header">
+              <i class="fa-solid fa-circle-radiation"></i>
+              <span>Area Animation</span>
+            </div>
+            <div class="animation-slot-body">
+              <div class="form-row">
+                <div class="form-group flex-grow">
+                  <label>Animation File</label>
+                  <div class="animation-search-wrapper">
+                    <input type="text" name="animation.area.file" value="{{animation.area.file}}" class="animation-file-input" data-slot="area" placeholder="Click or type to search..." autocomplete="off" />
+                    <div class="animation-dropdown" data-slot="area"></div>
+                  </div>
+                </div>
+                <button type="button" class="animation-preview-btn" data-slot="area" title="Preview on selected token">
+                  <i class="fa-solid fa-play"></i>
+                </button>
+              </div>
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Scale</label>
+                  <input type="number" name="animation.area.scale" value="{{animation.area.scale}}" min="0.1" max="5" step="0.1" />
+                </div>
+                <div class="form-group half">
+                  <label>Duration (ms)</label>
+                  <input type="text" name="animation.area.duration" value="{{#if animation.area.duration}}{{animation.area.duration}}{{/if}}" placeholder="Auto" title="Duration in milliseconds. Leave empty for auto (plays to completion)." />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {{else}}
+          <div class="animation-not-available">
+            <i class="fa-solid fa-film"></i>
+            <p>Animation system requires the <strong>Sequencer</strong> module to be installed and active.</p>
+            <p class="hint">Install Sequencer and optionally JB2A for animation assets.</p>
+          </div>
+          {{/if}}
+        </div>
+      </div><!-- /animation main-tab-content -->
+    </div><!-- /col-combat -->
+
+    <!-- ============================================ -->
+    <!-- COLUMN 3: Targeting + AoE                    -->
+    <!-- ============================================ -->
+    <div class="builder-column col-targeting">
+      <div class="column-header">
+        <i class="fa-solid fa-crosshairs"></i>
+        <span>Targeting</span>
+      </div>
+      <div class="column-content">
+        <!-- Targeting configuration -->
+        <div class="form-group targeting-section">
+          <label class="checkbox-label">
+            <input type="checkbox" name="targeting.isTargetMacro" {{#if targeting.isTargetMacro}}checked{{/if}} />
+            <span>Enable targeting system</span>
+          </label>
+          <p class="hint">When enabled, requires target selection and triggers threat/ruling system.</p>
+
+          <div class="targeting-options" style="{{#unless targeting.isTargetMacro}}display:none{{/unless}}">
+            <div class="targeting-mode-row">
+              <div class="targeting-mode-select">
+                <label class="sub-label">Mode</label>
+                <select name="targeting.mode">
+                  <option value="single" {{#if (eq targeting.mode "single")}}selected{{/if}}>Single Target</option>
+                  <option value="aoe" {{#if (eq targeting.mode "aoe")}}selected{{/if}}>AoE (auto-detect)</option>
+                  <option value="self" {{#if (eq targeting.mode "self")}}selected{{/if}}>Self</option>
+                </select>
+              </div>
+
+              <div class="targeting-max-targets" style="{{#unless (eq targeting.mode 'single')}}display:none{{/unless}}">
+                <label class="sub-label">Max Targets</label>
+                <input type="number" name="targeting.maxTargets" value="{{targeting.maxTargets}}" min="1" placeholder="1" />
+              </div>
+            </div>
+
+            <div class="targeting-include-self" style="{{#if (eq targeting.mode 'self')}}display:none{{/if}}">
+              <label class="checkbox-label">
+                <input type="checkbox" name="targeting.includeSelf" {{#if targeting.includeSelf}}checked{{/if}} />
+                <span>Caster can be targeted / affected</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <hr class="section-divider" />
+
+        <!-- AoE Configuration -->
+        <div class="form-group">
+          <label>Area of Effect</label>
+          <div class="aoe-labels">
+            <span class="sub-label">Shape</span>
+            <span class="sub-label">Min Size (ft)</span>
+            <span class="sub-label">Max Size (ft)</span>
+          </div>
+          <div class="aoe-config">
+            <select name="aoe.shape">
+              <option value="" {{#unless aoe.shape}}selected{{/unless}}>None</option>
+              <option value="circle" {{#if (eq aoe.shape "circle")}}selected{{/if}}>Circle</option>
+              <option value="cone" {{#if (eq aoe.shape "cone")}}selected{{/if}}>Cone</option>
+              <option value="line" {{#if (eq aoe.shape "line")}}selected{{/if}}>Line</option>
+              <option value="hex" {{#if (eq aoe.shape "hex")}}selected{{/if}}>Hex</option>
+            </select>
+            <input type="number" name="aoe.sizeMin" {{#if aoe.sizeMin}}value="{{aoe.sizeMin}}"{{/if}} placeholder="Min" min="0" />
+            <input type="number" name="aoe.sizeMax" {{#if aoe.sizeMax}}value="{{aoe.sizeMax}}"{{/if}} placeholder="Max" min="0" />
+          </div>
+          <p class="hint">If only min is set, size is fixed. Both values allow scaling during placement.</p>
+          <div class="aoe-cone-angle" style="{{#unless (eq aoe.shape 'cone')}}display:none{{/unless}}">
+            <label class="sub-label">Cone Angle (degrees)</label>
+            <input type="number" name="aoe.coneAngle" {{#if aoe.coneAngle}}value="{{aoe.coneAngle}}"{{/if}} placeholder="90" min="1" max="360" />
+          </div>
+          <div class="aoe-line-width" style="{{#unless (eq aoe.shape 'line')}}display:none{{/unless}}">
+            <label class="sub-label">Line Width (ft)</label>
+            <select name="aoe.lineWidth">
+              {{#each lineWidthOptions}}
+              <option value="{{this}}" {{#if (eq this ../aoe.lineWidth)}}selected{{/if}}>{{this}} ft</option>
+              {{/each}}
+            </select>
+          </div>
+          <div class="aoe-originate-self">
+            <label class="checkbox-label">
+              <input type="checkbox" name="aoe.originateSelf" {{#if aoe.originateSelf}}checked{{/if}} />
+              <span>Originate from caster's position</span>
+            </label>
+          </div>
+          <div class="aoe-follows-caster {{#unless aoe.originateSelf}}hidden{{/unless}}">
+            <label class="checkbox-label">
+              <input type="checkbox" name="aoe.followsCaster" {{#if aoe.followsCaster}}checked{{/if}} />
+              <span>AoE follows caster when they move</span>
+            </label>
+          </div>
+          <div class="aoe-exclusion-radius {{#unless aoe.shape}}hidden{{/unless}}">
+            <label>Inner Radius - Exclusion (ft)</label>
+            <input type="number" name="aoe.exclusionRadius" value="{{aoe.exclusionRadius}}" placeholder="0" min="0" />
+            <p class="hint">Tokens within this radius are excluded from AoE effects. Set to 0 for no exclusion. Use for ring-shaped effects.</p>
+          </div>
+          {{#if isGM}}
+          <div class="aoe-player-visibility {{#unless aoe.shape}}hidden{{/unless}}">
+            <label>Player Visibility</label>
+            <select name="aoe.playerVisibility">
+              <option value="hidden" {{#if (eq aoe.playerVisibility 'hidden')}}selected{{/if}}>Hidden from players</option>
+              <option value="visible" {{#if (eq aoe.playerVisibility 'visible')}}selected{{/if}}>Visible to players</option>
+              <option value="afterCast" {{#if (eq aoe.playerVisibility 'afterCast')}}selected{{/if}}>Show after cast</option>
+            </select>
+            <p class="hint">Controls whether players can see the AoE overlay on the grid. Players are still threatened by hidden AoEs.</p>
+          </div>
+          {{/if}}
+        </div>
+
+        <div class="form-group">
+          <label>AoE Duration</label>
+          <div class="duration-config">
+            <input type="number" name="aoeDuration" {{#if aoeDuration}}value="{{aoeDuration}}"{{/if}} placeholder="Turns" min="0" {{#if aoePermanent}}disabled{{/if}} />
+            <label class="checkbox-label duration-permanent">
+              <input type="checkbox" name="aoePermanent" {{#if aoePermanent}}checked{{/if}} />
+              <span>Permanent</span>
+            </label>
+          </div>
+          <p class="hint">0 or empty = removed at end of caster's turn.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- COLUMN 4: Script Preview / Edit              -->
+    <!-- ============================================ -->
+    <div class="builder-column col-script">
+      <div class="column-header">
+        <i class="fa-solid fa-code"></i>
+        <span>Script</span>
+        <button type="button" class="script-expand-btn" title="Expand script editor">
+          <i class="fa-solid fa-expand"></i>
+        </button>
+      </div>
+      <div class="column-content">
+        <div class="script-controls">
+          <label class="checkbox-label script-edit-toggle">
+            <input type="checkbox" class="script-enable-checkbox" {{#if scriptEditingEnabled}}checked{{/if}} />
+            <span>Enable Script Editing</span>
+          </label>
+          {{#if scriptEdited}}
+          <button type="button" data-action="resetToBuilder" class="script-reset-btn">
+            <i class="fa-solid fa-rotate-left"></i> Reset to Builder
+          </button>
+          {{/if}}
+        </div>
+        {{#if scriptEdited}}
+        <div class="script-warning-banner">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>Builder fields are locked. The script is now the source of truth.</span>
+        </div>
+        {{/if}}
+        <div class="script-textarea-wrapper">
+          <textarea name="customScript" class="script-textarea" {{#unless scriptEditingEnabled}}readonly{{/unless}} placeholder="// Script preview will appear here&#10;// Enable editing to modify directly">{{scriptPreview}}</textarea>
+        </div>
+        <p class="hint">Preview of what this macro does. Enable editing to write custom logic.</p>
+      </div>
+    </div>
+  </div>
+  {{/if}}
+
+  <!-- Legacy dice section - hidden, kept for backward compatibility -->
+  <input type="hidden" name="legacyDiceCount" value="{{dice.length}}" />
+  {{#each dice}}
+  <input type="hidden" name="dice[{{@index}}].count" value="{{count}}" />
+  <input type="hidden" name="dice[{{@index}}].sides" value="{{sides}}" />
+  <input type="hidden" name="dice[{{@index}}].type" value="{{type}}" />
+  {{/each}}
+
+  <!-- ============================================ -->
+  <!-- FOOTER: Action Buttons                       -->
+  <!-- ============================================ -->
+  <div class="form-actions">
+    <button type="submit" class="save-btn">
+      <i class="fa-solid fa-save"></i>
+      {{#if isEditing}}Save Changes{{else}}Create Macro{{/if}}
+    </button>
+    <button type="button" class="cancel-btn" data-action="cancel">
+      <i class="fa-solid fa-times"></i>
+      Cancel
+    </button>
+    {{#if isAppMacro}}
+    <button type="button" class="reset-btn" data-action="resetOriginal">
+      <i class="fa-solid fa-rotate-left"></i>
+      Reset to App Default
+    </button>
+    {{/if}}
+  </div>
+</div>

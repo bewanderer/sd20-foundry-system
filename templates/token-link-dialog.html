@@ -1,0 +1,20 @@
+<form class="souls-d20 souls-d20-link-dialog">
+  <div class="form-group">
+    <label>Select Character</label>
+    <div class="character-list" id="sd20-character-list">
+      {{#if characters}}
+        {{#each characters}}
+        <div class="character-item" data-uuid="{{this.uuid}}">
+          <div class="character-name">{{this.name}}</div>
+          <div class="character-info">
+            <span>Level {{this.level}} {{this.class}}</span>
+            <span>HP: {{this.currentHP}}/{{this.maxHP}}</span>
+          </div>
+        </div>
+        {{/each}}
+      {{else}}
+        <p class="no-characters">No characters available. Make sure SD20 App is open and connected.</p>
+      {{/if}}
+    </div>
+  </div>
+</form>

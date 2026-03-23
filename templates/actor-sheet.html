@@ -1,0 +1,28 @@
+<div class="sd20-actor-sheet">
+  <div class="sheet-header">
+    <div class="name-row">
+      <h1>{{actor.name}}</h1>
+      <div class="header-buttons">
+        <button type="button" class="header-btn" data-action="openCombatSettings" title="Combat Settings">
+          <i class="fa-solid fa-shield-halved"></i>
+        </button>
+        <button type="button" class="header-btn" data-action="openAllMacros" title="All Macros">
+          <i class="fa-solid fa-list"></i>
+        </button>
+      </div>
+    </div>
+    <div class="resource-bars">
+      <div class="resource hp">HP: {{system.hp.value}} / {{system.hp.max}}</div>
+      <div class="resource fp">FP: {{system.fp.value}} / {{system.fp.max}}</div>
+      <div class="resource ap">AP: {{system.ap.value}} / {{system.ap.max}}</div>
+    </div>
+  </div>
+  <div class="sheet-body">
+    <p class="app-link">Character data is managed in the SD20 App.</p>
+    {{#if system.characterUUID}}
+      <p class="linked"><i class="fa-solid fa-link"></i> Linked to SD20 App</p>
+    {{else}}
+      <p class="unlinked"><i class="fa-solid fa-unlink"></i> Not linked - use Token Config to link</p>
+    {{/if}}
+  </div>
+</div>
