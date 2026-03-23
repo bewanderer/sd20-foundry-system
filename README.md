@@ -10,7 +10,7 @@
 
 ## What is Souls D20?
 
-Souls D20 is a tabletop RPG system built from the ground up. It brings the strategic, high-stakes combat of Soulsborne games to the tabletop with deep character customization, weapon proficiency trees, destiny traits, and a dynamic combat system.
+Souls D20 is a tabletop RPG system built from the ground up. It brings the strategic, high-stakes combat of Soulsborne games to the tabletop with deep character customization, weapon proficiency trees, destined traits, and a dynamic combat system.
 
 ## Character App (Required)
 
@@ -75,8 +75,9 @@ Install these from Foundry's built-in module browser.
 3. Complete the mandatory Level 1 level-up
 4. Open Foundry and create a world with the Souls D20 system
 5. Create an actor, place a token on the scene
-6. Right-click the token > Token Config > SD20 tab > Link to Character
-6.1 Alternatively, you can simply click on the token and click on the link to character from app (chain icon button) below the macro bar to achieve the same results.
+6. Link your character to the token using one of these methods:
+   - Right-click the token > Token Config > SD20 tab > Link to Character
+   - Or click the token and use the chain icon button below the macro bar
 7. Your character data syncs automatically
 
 ## Questions & Feedback
