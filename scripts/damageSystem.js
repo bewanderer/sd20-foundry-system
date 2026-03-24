@@ -767,6 +767,10 @@ export function calculatePlayerDamage(baseDamage, tierResistance, flatResistance
   let effectiveTier = tierResistance;
   let effectiveFlat = flatResistance || 0;
 
+  // First 3 tiers each grant +1 flat bonus
+  const tierBonusFlat = tierResistance > 0 ? Math.min(tierResistance, CONFIG.PLAYER_RESISTANCE.TIER_MAX) : 0;
+  effectiveFlat += tierBonusFlat;
+
   // Handle tier overflow to flat (Tier 4+ becomes Tier 3 + extra flat)
   if (effectiveTier > CONFIG.PLAYER_RESISTANCE.TIER_MAX) {
     effectiveFlat += (effectiveTier - CONFIG.PLAYER_RESISTANCE.TIER_MAX);
