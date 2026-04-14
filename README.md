@@ -2,7 +2,7 @@
 
 **A full-system tabletop RPG inspired by Elden Ring and Soulsborne games.**
 
-> This is a **beta release (v0.9.0)**. Expect rough edges and ongoing improvements. Feedback and bug reports are welcome on our Discord!
+> This is a **beta release (v0.9.1)**. Expect rough edges and ongoing improvements. Feedback and bug reports are welcome on our Discord!
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white)](https://discord.gg/ruckQQxp)
 
