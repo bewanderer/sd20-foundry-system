@@ -2,7 +2,7 @@
   "id": "souls-d20",
   "title": "Souls D20",
   "description": "[BETA] A full-system tabletop RPG inspired by Elden Ring and Soulsborne games. Features strategic combat, deep character customization, real-time sync between Foundry and the SD20 Character App, custom macro system, combat pipeline, and animation support! Requires the SD20 Character App (soulsd20-character-app.vercel.app). Join our Discord: discord.gg/ruckQQxp",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "compatibility": {
     "minimum": "11",
     "verified": "13"
