@@ -1,6 +1,7 @@
 // Minimal SD20 Actor Sheet - character data is managed in the SD20 App
 
 import { openCombatSettings } from './combatSettings.js';
+import { openPresetSelector } from './monsterPresets.js';
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const ActorSheetV2 = foundry.applications.sheets.ActorSheetV2;
@@ -18,7 +19,8 @@ export class SD20ActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) {
     },
     actions: {
       openCombatSettings: SD20ActorSheet.#onOpenCombatSettings,
-      openAllMacros: SD20ActorSheet.#onOpenAllMacros
+      openAllMacros: SD20ActorSheet.#onOpenAllMacros,
+      openMonsterPresets: SD20ActorSheet.#onOpenMonsterPresets
     }
   };
 
@@ -50,10 +52,23 @@ export class SD20ActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) {
     }
   }
 
+  static #onOpenMonsterPresets() {
+    if (this.actor.type !== 'npc') {
+      ui.notifications.warn('Monster presets are only available for NPC actors');
+      return;
+    }
+    if (game.user.isGM || this.actor.isOwner) {
+      openPresetSelector(this.actor);
+    } else {
+      ui.notifications.warn('You do not have permission to access Monster Presets');
+    }
+  }
+
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
     context.system = this.actor.system;
     context.actor = this.actor;
+    context.isNPC = this.actor.type === 'npc';
     return context;
   }
 }

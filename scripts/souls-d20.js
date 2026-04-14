@@ -287,6 +287,13 @@ Hooks.once('ready', async () => {
   // ============================================================
   log('BroadcastChannel initialized, waiting for SD20 App...');
 
+  // Hide GM-only descriptions in chat messages for non-GM players
+  Hooks.on('renderChatMessageHTML', (message, html) => {
+    if (!game.user.isGM) {
+      html.querySelectorAll('.macro-card-description.gm-only').forEach(node => node.remove());
+    }
+  });
+
   // Set NPC tokens to be unlinked by default (each token gets independent data)
   Hooks.on('preCreateActor', (actor) => {
     if (actor.type === 'npc') {

@@ -3974,7 +3974,11 @@ export class MacroBar {
     html += `</div>`;
 
     if (macro.description) {
-      html += `<div class="macro-card-description">${macro.description}</div>`;
+      if (macro.showDescriptionToPlayers === false) {
+        html += `<div class="macro-card-description gm-only">${macro.description}</div>`;
+      } else {
+        html += `<div class="macro-card-description">${macro.description}</div>`;
+      }
     }
 
     // Stats row (AP, FP, Range, AOE)

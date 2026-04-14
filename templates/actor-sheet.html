@@ -3,6 +3,11 @@
     <div class="name-row">
       <h1>{{actor.name}}</h1>
       <div class="header-buttons">
+        {{#if isNPC}}
+        <button type="button" class="header-btn" data-action="openMonsterPresets" title="Monster Presets">
+          <i class="fa-solid fa-dragon"></i>
+        </button>
+        {{/if}}
         <button type="button" class="header-btn" data-action="openCombatSettings" title="Combat Settings">
           <i class="fa-solid fa-shield-halved"></i>
         </button>

@@ -1,0 +1,54 @@
+<div class="sd20-preset-selector">
+  <!-- Search Bar -->
+  <div class="preset-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input type="text" class="preset-search-input" placeholder="Search presets..." />
+    </div>
+    {{#if currentPreset}}
+    <div class="current-preset-badge">
+      <span>{{currentPreset}}</span>
+    </div>
+    {{/if}}
+  </div>
+
+  <!-- Category Columns -->
+  <div class="preset-columns">
+    {{#each categories}}
+    <div class="preset-column">
+      <div class="column-header">
+        <span class="column-title">{{name}}</span>
+        <span class="column-count">{{presets.length}}</span>
+      </div>
+      <div class="column-list">
+        {{#each presets}}
+        <div class="preset-row {{#if isCurrent}}current{{/if}} {{#if isSelected}}selected{{/if}}" data-preset-name="{{name}}">
+          <div class="preset-name">{{name}}</div>
+          <div class="preset-meta">
+            <span class="meta hp">{{hp}} HP</span>
+            <span class="meta sep">/</span>
+            <span class="meta fp">{{fp}} FP</span>
+            <span class="meta sep">/</span>
+            <span class="meta ap">{{ap}} AP</span>
+          </div>
+          {{#if isCurrent}}<span class="active-indicator">Active</span>{{/if}}
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
+  </div>
+
+  <!-- Bottom Section: Info + Actions -->
+  <div class="preset-bottom">
+    <div class="preset-info-panel">
+      <span class="info-empty">Select a preset to see details.</span>
+    </div>
+    <div class="preset-actions">
+      <p class="warning-text">Applying a preset replaces all current actor data.</p>
+      <button type="button" class="apply-btn {{#unless hasSelection}}disabled{{/unless}}" data-action="applyPreset">
+        Apply Preset
+      </button>
+    </div>
+  </div>
+</div>

@@ -261,6 +261,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       icon: existingMacro?.icon || 'fa-solid fa-star',
       category: existingMacro?.category || this.defaultCategory,
       keywords: existingMacro?.keywords || '',
+      showDescriptionToPlayers: existingMacro?.showDescriptionToPlayers ?? true,
       apCost: existingMacro?.apCost ?? 0,
       fpCost: existingMacro?.fpCost ?? 0,
       hpCost: existingMacro?.hpCost ?? 0,
@@ -928,6 +929,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       icon: this._basicFields.icon,
       category: this._basicFields.category,
       keywords: this._basicFields.keywords,
+      showDescriptionToPlayers: this._basicFields.showDescriptionToPlayers,
       apCost: this._basicFields.apCost,
       fpCost: this._basicFields.fpCost,
       hpCost: this._basicFields.hpCost,
@@ -1958,6 +1960,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     if (iconSelect) this._basicFields.icon = iconSelect.value;
     if (categorySelect) this._basicFields.category = categorySelect.value;
     if (keywordsInput) this._basicFields.keywords = keywordsInput.value;
+    const showDescCb = el.querySelector('input[name="showDescriptionToPlayers"]');
+    if (showDescCb) this._basicFields.showDescriptionToPlayers = showDescCb.checked;
 
     // Cost fields
     const apInput = el.querySelector('input[name="apCost"]');
@@ -2355,6 +2359,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       // Preserve catalyst info for spell/spirit grouping
       catalystId: this.existingMacro?.catalystId || null,
       catalystSlot: this.existingMacro?.catalystSlot || null,
+      showDescriptionToPlayers: this._basicFields.showDescriptionToPlayers ?? true,
       macroCategory: fd.macroCategory || 'custom',
       category: this._getSpellCategory(fd.macroCategory, this.existingMacro?.category),
       // Simple roll (optional XdY + bonus, ignored if diceSides is not set)

@@ -80,6 +80,13 @@
           <textarea name="description" placeholder="Optional description" rows="2">{{description}}</textarea>
         </div>
 
+        <div class="trigger-on-cast-option">
+          <label class="checkbox-label">
+            <input type="checkbox" name="showDescriptionToPlayers" {{#if showDescriptionToPlayers}}checked{{/if}} />
+            <span>Show description to players when rolled</span>
+          </label>
+        </div>
+
         <div class="form-row">
           <div class="form-group half">
             <label>AP Cost</label>
@@ -180,7 +187,7 @@
           <!-- Flat mode input -->
           <div class="rest-flat-config {{#if (eq restAbility.maxUses.mode "formula")}}hidden{{/if}}">
             <div class="form-group">
-              <input type="number" name="restAbility.maxUses.flat" value="{{restAbility.maxUses.flat}}" min="1" placeholder="3" />
+              <input type="number" name="restAbility.maxUses.flat" value="{{restAbility.maxUses.flat}}" min="0" placeholder="3" />
             </div>
           </div>
 
