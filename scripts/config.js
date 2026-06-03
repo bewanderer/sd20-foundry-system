@@ -7,10 +7,8 @@ export const CONFIG = {
   MODULE_ID: 'souls-d20',
   MODULE_NAME: 'Souls D20',
 
-  // WebSocket relay server for cross-origin communication
-  // Development: run "node sd20-relay-server.js" locally
-  // Production: hosted on Railway
   WEBSOCKET_URL: 'wss://sd20-relay.up.railway.app',
+  API_BASE_URL: 'https://soulsd20-api.up.railway.app',
 
   // Message types
   MESSAGE_TYPES: {

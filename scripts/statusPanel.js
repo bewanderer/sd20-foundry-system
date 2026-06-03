@@ -11,6 +11,7 @@
 
 import { CONFIG } from './config.js';
 import { log, debug } from './utils.js';
+import { canSeeActorName, postMaskedChat } from './permissions.js';
 import { syncTokenStatusIcons } from './tokenStatusIcons.js';
 import {
   applyConditionToActor, commitActorUpdates, getStatusTriggerEffect, applyDamageToActor,
@@ -122,7 +123,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   get title() {
-    return `Status — ${this.token.name}`;
+    const label = canSeeActorName(this.actor) ? this.token.name : '???';
+    return `Status — ${label}`;
   }
 
   /**
@@ -585,15 +587,11 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
             playStatusAnimation(this.token, conditionName);
           }
 
-          // Post chat message about the trigger
-          ChatMessage.create({
-            content: `<div class="sd20-status-trigger">
-              <strong>${actor.name}</strong> - ${effectName} threshold reached!<br>
+          postMaskedChat(actor, (displayName) => `<div class="sd20-status-trigger">
+              <strong>${displayName}</strong> - ${effectName} threshold reached!<br>
               <em>${conditionName}</em> applied.
               ${triggerEffect?.description ? `<br><small>${triggerEffect.description}</small>` : ''}
-            </div>`,
-            speaker: { alias: actor.name }
-          });
+            </div>`);
 
           log(`${effectName} reached threshold (${value}/${threshold}) - ${conditionName} triggered for ${actor.name}`);
 

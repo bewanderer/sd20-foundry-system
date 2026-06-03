@@ -6,6 +6,7 @@
 import { CONFIG } from './config.js';
 import { log, debug } from './utils.js';
 import { showMacroBar, closeMacroBar } from './macroBar.js';
+import { openAppAccountDialog } from './appAccountDialog.js';
 
 /**
  * Register settings for macro bar visibility (call during init)
@@ -216,6 +217,23 @@ function _injectSidebarLibraryButton() {
       rulingLi.appendChild(rulingBtn);
       menu.appendChild(rulingLi);
     }
+
+    const accountLi = document.createElement('li');
+    accountLi.classList.add('sd20-account-tab');
+
+    const accountBtn = document.createElement('button');
+    accountBtn.setAttribute('type', 'button');
+    accountBtn.dataset.tooltip = 'SD20 App Account';
+    accountBtn.setAttribute('aria-label', 'SD20 App Account');
+    accountBtn.innerHTML = '<i class="fa-solid fa-user"></i>';
+    accountBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openAppAccountDialog();
+    });
+
+    accountLi.appendChild(accountBtn);
+    menu.appendChild(accountLi);
   } else {
     // Fallback: flat <a> items
     const libraryBtn = document.createElement('a');
@@ -250,7 +268,20 @@ function _injectSidebarLibraryButton() {
 
       tabNav.appendChild(rulingBtn);
     }
+
+    const accountBtn = document.createElement('a');
+    accountBtn.classList.add('item', 'sd20-account-tab');
+    accountBtn.dataset.tooltip = 'SD20 App Account';
+    accountBtn.innerHTML = '<i class="fa-solid fa-user"></i>';
+    accountBtn.style.cursor = 'pointer';
+    accountBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openAppAccountDialog();
+    });
+
+    tabNav.appendChild(accountBtn);
   }
 
-  debug('Macro Library button injected into sidebar');
+  debug('Macro Library, Ruling Panel, and Account buttons injected into sidebar');
 }

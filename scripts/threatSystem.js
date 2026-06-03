@@ -609,6 +609,7 @@ async function _showDefenderPopup(data) {
         title: 'Incoming Ability',
         icon: 'fa-solid fa-exclamation-triangle'
       },
+      position: { zIndex: 100000 },
       content,
       yes: { label: 'Accept', icon: 'fa-solid fa-check' },
       no: { label: 'React', icon: 'fa-solid fa-shield' },
@@ -1460,6 +1461,26 @@ function _handlePlayerThreatEvent(data) {
   }
 
   debug(`GM received threat event from player: ${event.id} (${event.macroName} → ${event.defenderName})`);
+
+  // Sanity-check player-rolled totals against the formula they sent so the GM
+  // can spot a tampered payload before approving it in the ruling panel.
+  for (const comp of event.components || []) {
+    if (!comp?.formula) continue;
+    try {
+      const probe = new Roll(comp.formula);
+      const max = probe.terms.reduce((acc, term) => {
+        if (term.faces && term.number) return acc + term.faces * term.number;
+        if (typeof term.number === 'number') return acc + Math.abs(term.number);
+        return acc;
+      }, 0);
+      const total = Number(comp.rawAmount ?? comp.total ?? 0);
+      if (total > max + 1) {
+        console.warn(`SD20 | Threat event ${event.id}: component "${comp.type || comp.name || 'unknown'}" reported total ${total} exceeds maximum ${max} for formula "${comp.formula}". Inspect the ruling panel before approving.`);
+      }
+    } catch (err) {
+      debug(`Could not parse formula "${comp.formula}" for sanity check`, err);
+    }
+  }
 
   // Store the event on GM's client
   pendingEvents.set(event.id, event);

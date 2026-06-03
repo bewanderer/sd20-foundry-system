@@ -64,7 +64,7 @@
       </div>
       <div class="category-content">
         {{#each macros}}
-        <div class="library-macro-item {{#if selected}}is-selected{{/if}}" data-library-id="{{libraryId}}"
+        <div class="library-macro-item {{#if selected}}is-selected{{/if}} {{#if _aggregatedFromActor}}from-actor{{/if}}" data-library-id="{{libraryId}}"
              data-macro-name="{{name}}" data-macro-desc="{{description}}" data-macro-icon="{{icon}}"
              data-macro-ap="{{apCost}}" data-macro-fp="{{fpCost}}" data-source-actor="{{sourceActor}}">
           <input type="checkbox" class="macro-select-checkbox" data-library-id="{{libraryId}}" {{#if selected}}checked{{/if}} />
@@ -79,7 +79,7 @@
             <span class="rest-badge {{#if (eq restAbility.type 'short')}}sr{{else}}lr{{/if}}">{{#if (eq restAbility.type 'short')}}SR{{else}}LR{{/if}}</span>
           </span>
           {{/if}}
-          <span class="macro-source" title="From: {{sourceActor}}">{{sourceActor}}</span>
+          <span class="macro-source" title="{{#if _aggregatedFromActor}}Lives on actor: {{sourceActor}}{{else}}Saved from: {{sourceActor}}{{/if}}">{{#if _aggregatedFromActor}}<i class="fa-solid fa-user"></i> {{/if}}{{sourceActor}}</span>
           <span class="macro-spacer"></span>
           <button type="button" data-action="copyToActor" data-library-id="{{libraryId}}" title="Add to macro bar">
             <i class="fa-solid fa-copy"></i>

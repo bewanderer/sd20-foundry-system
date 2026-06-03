@@ -514,6 +514,11 @@ export function syncTokenStatusIcons(token) {
     return;
   }
 
+  if (!token.visible) {
+    clearBadges(token);
+    return;
+  }
+
   // Prevent duplicate renders for the same token
   if (_renderingTokens.has(token.id)) return;
   _renderingTokens.add(token.id);
@@ -572,6 +577,11 @@ function updateBadgePositions() {
 function updateBadgePosition(token) {
   if (!token._sd20BadgeContainer) return;
 
+  if (!token.visible) {
+    clearBadges(token);
+    return;
+  }
+
   const container = token._sd20BadgeContainer;
   const tokenRect = token.bounds;
   const canvasRect = canvas.app.view.getBoundingClientRect();
@@ -625,6 +635,13 @@ export function registerTokenStatusIcons() {
       const value = parseInt(e.key);
       const { badge, token } = _hoveredBadge;
 
+      if (!game.user.isGM && !token.actor?.isOwner) {
+        ui.notifications.warn('You are not the owner of this token.');
+        _hoveredBadge = null;
+        _hoveredToken = null;
+        return;
+      }
+
       if (badge.id === 'Dodged') {
         // Update dodge count - setting to 0 removes the badge
         await setDodgeCount(token.actor, value);
@@ -653,6 +670,14 @@ export function registerTokenStatusIcons() {
     }
     syncAllTokens();
     debug('Token status icons synced on canvas ready');
+  });
+
+  Hooks.on('sightRefresh', () => {
+    syncAllTokens();
+  });
+
+  Hooks.on('lightingRefresh', () => {
+    syncAllTokens();
   });
 
   // Sync when a token is drawn/refreshed (handles drag movement in real-time)
@@ -852,6 +877,11 @@ export async function cleanupActorStatus(actor) {
 
   if (!actor) {
     console.warn('SD20: No actor provided and no token selected');
+    return { removed: [], kept: [] };
+  }
+
+  if (!game.user.isGM && !actor.isOwner) {
+    ui.notifications.warn(`You do not have permission to clean up status on ${actor.name}.`);
     return { removed: [], kept: [] };
   }
 

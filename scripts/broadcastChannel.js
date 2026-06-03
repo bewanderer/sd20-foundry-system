@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { log, warn, error, debug, validateMessage } from './utils.js';
+import { getToken } from './appAuth.js';
 
 export class BroadcastChannelManager {
   constructor() {
@@ -17,18 +18,43 @@ export class BroadcastChannelManager {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 2000;
+    this.authClosed = false;
+
+    Hooks.on('sd20.appAuth.changed', ({ signedIn }) => {
+      this.reconnectForAuthChange(signedIn);
+    });
 
     this.init();
+  }
+
+  reconnectForAuthChange(signedIn) {
+    this.authClosed = false;
+    this.reconnectAttempts = 0;
+    if (this.socket) {
+      try { this.socket.close(); } catch { /* ignore */ }
+      this.socket = null;
+      this.connected = false;
+    }
+    if (signedIn) {
+      this.init();
+    }
   }
 
   /**
    * Initialize WebSocket connection to relay server
    */
   init() {
-    try {
-      log('Connecting to WebSocket relay:', CONFIG.WEBSOCKET_URL);
+    const token = getToken();
+    if (!token) {
+      log('No paired App token; relay connect deferred until pairing.');
+      return;
+    }
 
-      this.socket = new WebSocket(CONFIG.WEBSOCKET_URL);
+    try {
+      const connectUrl = `${CONFIG.WEBSOCKET_URL}?token=${encodeURIComponent(token)}`;
+      log('Connecting to WebSocket relay (authenticated)');
+
+      this.socket = new WebSocket(connectUrl);
 
       this.socket.onopen = () => {
         log('WebSocket relay connected');
@@ -50,9 +76,15 @@ export class BroadcastChannelManager {
         }
       };
 
-      this.socket.onclose = () => {
-        warn('WebSocket relay disconnected');
+      this.socket.onclose = (event) => {
+        warn('WebSocket relay disconnected (code', event.code, ')');
         this.connected = false;
+        // 4401: relay rejected the token; reconnect happens on next pairing.
+        if (event.code === 4401) {
+          this.authClosed = true;
+          warn('Relay rejected token; pair again from the SD20 App.');
+          return;
+        }
         this.attemptReconnect();
       };
 

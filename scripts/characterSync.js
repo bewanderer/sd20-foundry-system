@@ -56,10 +56,38 @@ export function registerCharacterSyncHandlers() {
       requestImmediateCharacterData(newUUID, actor.id);
     }
 
-    // If UUID was cleared, update the linked UUIDs list
     if (!newUUID && oldUUID) {
-      log(`Character unlinked from "${actor.name}"`);
-      // Re-request to update App's knowledge of linked UUIDs
+      log(`Character unlinked from "${actor.name}", resetting App-synced fields to template defaults`);
+      const templateStats = {
+        vitality: { value: 10, mod: 0 },
+        endurance: { value: 10, mod: 0 },
+        strength: { value: 10, mod: 0 },
+        dexterity: { value: 10, mod: 0 },
+        attunement: { value: 10, mod: 0 },
+        intelligence: { value: 10, mod: 0 },
+        faith: { value: 10, mod: 0 }
+      };
+      try {
+        await actor.update({
+          'system.hp': { value: 0, max: 0 },
+          'system.fp': { value: 0, max: 0 },
+          'system.ap': { value: 8, max: 8 },
+          'system.level': 0,
+          'system.stats': templateStats,
+          'system.equippedWeapons': null,
+          [`flags.${CONFIG.MODULE_ID}.characterData`]: null,
+          [`flags.${CONFIG.MODULE_ID}.skills`]: null,
+          [`flags.${CONFIG.MODULE_ID}.knowledge`]: null,
+          [`flags.${CONFIG.MODULE_ID}.equipment`]: null,
+          [`flags.${CONFIG.MODULE_ID}.attuned_spells`]: null,
+          [`flags.${CONFIG.MODULE_ID}.attuned_spirits`]: null,
+          [`flags.${CONFIG.MODULE_ID}.attuned_weapon_skills`]: null,
+          [`flags.${CONFIG.MODULE_ID}.combat`]: null,
+          [`flags.${CONFIG.MODULE_ID}.statMods`]: null
+        });
+      } catch (err) {
+        warn(`Failed to reset actor "${actor.name}" on unlink:`, err);
+      }
       requestLinkedCharacterData();
     }
   });
@@ -220,6 +248,16 @@ async function updateActorFromCharacterData(actor, charData) {
   // Update stats
   if (charData.stats) {
     actorUpdates['system.stats'] = charData.stats;
+  }
+
+  if (charData.maxHP !== undefined) {
+    actorUpdates['system.hp.max'] = charData.maxHP;
+  }
+  if (charData.maxFP !== undefined) {
+    actorUpdates['system.fp.max'] = charData.maxFP;
+  }
+  if (charData.maxAP !== undefined) {
+    actorUpdates['system.ap.max'] = charData.maxAP;
   }
 
   // Update skills and knowledge

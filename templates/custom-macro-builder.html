@@ -50,6 +50,18 @@
       <p class="hint">The bonus added to the 1d20 roll.</p>
     </div>
 
+    <div class="form-group">
+      <label>Description</label>
+      <textarea name="description" placeholder="Optional description" rows="2">{{description}}</textarea>
+    </div>
+
+    <div class="trigger-on-cast-option">
+      <label class="checkbox-label">
+        <input type="checkbox" name="showDescriptionToPlayers" {{#if showDescriptionToPlayers}}checked{{/if}} />
+        <span>Show description to players when rolled</span>
+      </label>
+    </div>
+
     <!-- Preserve hidden fields -->
     {{#if isRestrictedEditMode}}
     <input type="hidden" name="macroCategory" value="{{macroCategory}}" />
@@ -342,7 +354,7 @@
                   <span class="piercing-hint">Reduces target resistance</span>
                 </div>
                 {{!-- Row 4: Manual Scaling Entries (expandable) - shown when scalingSource is 'manual' --}}
-                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="damageTypes" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                <div class="manual-scaling-container {{#if (and (ne scalingSource 'manual') (eq manualScalingEntries.length 0))}}hidden{{/if}}" data-component="damageTypes" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
                   {{!-- Header labels for scaling columns --}}
                   <div class="manual-scaling-header">
                     {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}
@@ -460,7 +472,7 @@
                   </select>
                 </div>
                 {{!-- Row 3: Manual Scaling Entries --}}
-                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="statusEffects" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                <div class="manual-scaling-container {{#if (and (ne scalingSource 'manual') (eq manualScalingEntries.length 0))}}hidden{{/if}}" data-component="statusEffects" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
                   {{!-- Header labels for scaling columns --}}
                   <div class="manual-scaling-header">
                     {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}
@@ -713,7 +725,7 @@
                 </div>
 
                 {{!-- Manual Scaling Entries for restoration --}}
-                <div class="manual-scaling-container {{#unless (eq scalingSource 'manual')}}hidden{{/unless}}" data-component="restoration" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
+                <div class="manual-scaling-container {{#if (and (ne scalingSource 'manual') (eq manualScalingEntries.length 0))}}hidden{{/if}}" data-component="restoration" data-component-index="{{@index}}" data-is-npc="{{../isNPC}}">
                   {{!-- Header labels for scaling columns --}}
                   <div class="manual-scaling-header">
                     {{#if ../isNPC}}<span class="scaling-header-label mode-label">Mode</span>{{/if}}

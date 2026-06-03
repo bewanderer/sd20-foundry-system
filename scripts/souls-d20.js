@@ -35,6 +35,7 @@ import * as targetingSystem from './targetingSystem.js';
 import { registerAoEGridHighlight } from './aoeGridHighlight.js';
 import { registerAoERepeatUI } from './aoeRepeatUI.js';
 import { registerAnimationSettings, initAnimationSystem, animationAPI } from './animationSystem.js';
+import { registerAppAuthSettings } from './appAuth.js';
 
 // Initialize system
 Hooks.once('init', () => {
@@ -146,6 +147,10 @@ Hooks.once('init', () => {
     return a >= b;
   });
 
+  Handlebars.registerHelper('ne', function(a, b) {
+    return a !== b;
+  });
+
   Handlebars.registerHelper('lowercase', function(str) {
     return (str || '').toLowerCase();
   });
@@ -198,6 +203,8 @@ Hooks.once('init', () => {
 
   // Register animation system settings
   registerAnimationSettings();
+
+  registerAppAuthSettings();
 
   // Register movement pre-hook early (needs to capture position before move)
   registerMovementPreHook();
@@ -287,11 +294,25 @@ Hooks.once('ready', async () => {
   // ============================================================
   log('BroadcastChannel initialized, waiting for SD20 App...');
 
-  // Hide GM-only descriptions in chat messages for non-GM players
+  // GM-only descriptions are visible to: the GM, and the actor's owner. Stripped from everyone else.
+  const shouldStripGmOnly = (message) => {
+    if (game.user.isGM) return false;
+    const actorId = message.flags?.['souls-d20']?.actorId;
+    const actor = actorId ? game.actors.get(actorId) : null;
+    if (actor?.testUserPermission(game.user, 'OWNER')) return false;
+    return true;
+  };
+
+  // V13 hook: html is a native HTMLElement
   Hooks.on('renderChatMessageHTML', (message, html) => {
-    if (!game.user.isGM) {
-      html.querySelectorAll('.macro-card-description.gm-only').forEach(node => node.remove());
-    }
+    if (!shouldStripGmOnly(message)) return;
+    html.querySelectorAll('.macro-card-description.gm-only').forEach(node => node.remove());
+  });
+
+  // V11/V12 hook: html is a jQuery wrapper; fires only on those versions
+  Hooks.on('renderChatMessage', (message, html) => {
+    if (!shouldStripGmOnly(message)) return;
+    html.find('.macro-card-description.gm-only').remove();
   });
 
   // Set NPC tokens to be unlinked by default (each token gets independent data)

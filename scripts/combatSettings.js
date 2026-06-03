@@ -319,10 +319,15 @@ export class CombatSettingsDialog extends HandlebarsApplicationMixin(Application
       ? (this._pendingBehaviorNotes ?? this.actor.getFlag(CONFIG.MODULE_ID, 'behaviorNotes') ?? '')
       : '';
 
+    const nameRevealed = this.actor.getFlag(CONFIG.MODULE_ID, 'nameRevealed') === true;
+    const isGM = game.user.isGM;
+
     return {
       activeTab: this._activeTab,
       settings,
       isNPC,
+      isGM,
+      nameRevealed,
       isUnlinkedToken: this.isUnlinkedToken,
       npcResistances,
       npcStatusThresholds,
@@ -529,6 +534,22 @@ export class CombatSettingsDialog extends HandlebarsApplicationMixin(Application
   static async #onSave() {
     const settings = this._readFormData();
     if (!settings) return;
+
+    // Only the GM can change name reveal state. Skip silently for non-GM users
+    // so they can still save other settings without permissions errors.
+    if (game.user.isGM) {
+      const nameRevealedInput = this.element?.querySelector('input[name="nameRevealed"]');
+      if (nameRevealedInput) {
+        const revealed = nameRevealedInput.checked;
+        if (this.isUnlinkedToken && this.token) {
+          await this.token.document.update({
+            [`delta.flags.${CONFIG.MODULE_ID}.nameRevealed`]: revealed
+          });
+        } else {
+          await this.actor.setFlag(CONFIG.MODULE_ID, 'nameRevealed', revealed);
+        }
+      }
+    }
 
     // For unlinked tokens, save to the token document's delta
     // For base actors (actor sheet), save to the actor directly
@@ -798,6 +819,11 @@ const openDialogs = new Map();
  */
 export function openCombatSettings(actor, token = null) {
   if (!actor) return;
+
+  if (!game.user.isGM && !actor.isOwner) {
+    ui.notifications.warn(`You do not have permission to access Combat Settings for ${actor.name}.`);
+    return;
+  }
 
   // Determine if this is an unlinked token
   const isUnlinked = token && !token.document.actorLink;

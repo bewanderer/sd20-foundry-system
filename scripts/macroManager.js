@@ -487,6 +487,10 @@ export class MacroManager {
       macros.push(...offHandMacros);
     }
 
+    // Generators return null for unhydrated stub entries; collect-and-filter
+    // so a single broken spell does not produce an "undefined" macro on the bar.
+    const pushIfDefined = (macro) => { if (macro) macros.push(macro); };
+
     // CF2: Generate spell macros - one per spell × catalyst combination
     const catalysts = combatData.catalysts || [];
     if (combatData.attunedSpells?.length > 0) {
@@ -494,11 +498,11 @@ export class MacroManager {
         if (catalysts.length > 0) {
           // Generate a spell macro for EACH catalyst
           for (const catalyst of catalysts) {
-            macros.push(this.generateSpellMacroForCatalyst(spell, stats, catalyst));
+            pushIfDefined(this.generateSpellMacroForCatalyst(spell, stats, catalyst));
           }
         } else {
           // Backwards compatibility: no catalysts, use pre-calculated scaling
-          macros.push(this.generateSpellMacro(spell, stats));
+          pushIfDefined(this.generateSpellMacro(spell, stats));
         }
         // Note: Charged variants are NOT auto-generated per CF2 decision
       }
@@ -510,11 +514,11 @@ export class MacroManager {
         if (catalysts.length > 0) {
           // Generate a spirit macro for EACH catalyst
           for (const catalyst of catalysts) {
-            macros.push(this.generateSpiritMacroForCatalyst(spirit, stats, catalyst));
+            pushIfDefined(this.generateSpiritMacroForCatalyst(spirit, stats, catalyst));
           }
         } else {
           // Backwards compatibility: no catalysts, use pre-calculated scaling
-          macros.push(this.generateSpiritMacro(spirit, stats));
+          pushIfDefined(this.generateSpiritMacro(spirit, stats));
         }
       }
     }
@@ -522,7 +526,7 @@ export class MacroManager {
     // Generate weapon skill macros
     if (combatData.attunedWeaponSkills?.length > 0) {
       for (const skill of combatData.attunedWeaponSkills) {
-        macros.push(this.generateWeaponSkillMacro(skill, stats));
+        pushIfDefined(this.generateWeaponSkillMacro(skill, stats));
       }
     }
 
@@ -888,6 +892,10 @@ export class MacroManager {
    * Generate a spell macro
    */
   generateSpellMacro(spell, stats, isCharged = false) {
+    if (!spell || spell.name === undefined) {
+      debug('Skipping spell macro: missing name', spell?.id);
+      return null;
+    }
     // Use pre-calculated scalingBonus from App if available, otherwise calculate locally
     const scalingBonus = spell.scalingBonus !== undefined
       ? spell.scalingBonus
@@ -931,6 +939,10 @@ export class MacroManager {
    * Generate a spirit summoning macro
    */
   generateSpiritMacro(spirit, stats) {
+    if (!spirit || spirit.name === undefined) {
+      debug('Skipping spirit macro: missing name', spirit?.id);
+      return null;
+    }
     // Use pre-calculated scalingBonus from App if available, otherwise calculate locally
     const scalingBonus = spirit.scalingBonus !== undefined
       ? spirit.scalingBonus
@@ -972,6 +984,10 @@ export class MacroManager {
    * @param {Object} catalyst - The catalyst weapon with spell_scaling
    */
   generateSpellMacroForCatalyst(spell, stats, catalyst) {
+    if (!spell || spell.name === undefined) {
+      debug('Skipping catalyst spell macro: missing name', spell?.id);
+      return null;
+    }
     // Calculate scaling using THIS catalyst's spell_scaling
     const scalingBonus = this.calculateSpellScalingForCatalyst(spell, catalyst, stats);
     const catalystName = catalyst.displayName || catalyst.name || 'Catalyst';
@@ -1018,6 +1034,10 @@ export class MacroManager {
    * @param {Object} catalyst - The catalyst weapon with spell_scaling
    */
   generateSpiritMacroForCatalyst(spirit, stats, catalyst) {
+    if (!spirit || spirit.name === undefined) {
+      debug('Skipping catalyst spirit macro: missing name', spirit?.id);
+      return null;
+    }
     // Calculate scaling using THIS catalyst's spell_scaling
     const scalingBonus = this.calculateSpellScalingForCatalyst(spirit, catalyst, stats);
     const catalystName = catalyst.displayName || catalyst.name || 'Catalyst';
@@ -1123,6 +1143,10 @@ export class MacroManager {
    * Generate a weapon skill macro
    */
   generateWeaponSkillMacro(skill, stats, linkedSlot = null) {
+    if (!skill || skill.name === undefined) {
+      debug('Skipping weapon skill macro: missing name', skill?.id);
+      return null;
+    }
     // Use pre-calculated scalingBonus from App if available, otherwise calculate locally
     const scalingBonus = skill.scalingBonus !== undefined
       ? skill.scalingBonus

@@ -4,7 +4,8 @@
  */
 
 import { CONFIG } from './config.js';
-import { log, debug } from './utils.js';
+import { log, debug, warn } from './utils.js';
+import { postMaskedChat } from './permissions.js';
 import {
   getActorCombatSettings, getActorStatusBuildup, getActorActiveConditions,
   applyDamageToActor, commitActorUpdates, isConditionActive,
@@ -71,10 +72,10 @@ export function registerCombatTracker() {
   Hooks.on('updateCombat', handleTurnChange);
 
   // Listen for delay turn requests from players (GM executes to preserve edit permissions)
-  game.socket.on(`system.${CONFIG.MODULE_ID}`, (data) => {
+  game.socket.on(`system.${CONFIG.MODULE_ID}`, (data, userId) => {
     log('Socket message received:', data);
     if (data.type === 'delayTurn' && game.user.isGM) {
-      _gmExecuteDelay(data);
+      _gmExecuteDelay(data, userId);
     }
   });
 
@@ -563,10 +564,9 @@ async function applyPassiveRegeneration(actor, hpRegen, fpRegen, name) {
 
   // Log to chat if anything was regenerated
   if (messages.length > 0) {
-    ChatMessage.create({
-      content: `<div class="sd20-regen-message"><strong>${name}</strong> regenerates ${messages.join(', ')}</div>`,
-      speaker: { alias: name }
-    });
+    postMaskedChat(actor, (displayName) =>
+      `<div class="sd20-regen-message"><strong>${displayName}</strong> regenerates ${messages.join(', ')}</div>`
+    );
   }
 }
 
@@ -701,12 +701,24 @@ async function executeDelayTurn(combatant, combat, newInitiative) {
 /**
  * GM-side execution of delay turn (called via socket from player)
  */
-async function _gmExecuteDelay(data) {
+async function _gmExecuteDelay(data, requesterId) {
   const combat = game.combats.get(data.combatId);
   const combatant = combat?.combatants.get(data.combatantId);
   if (!combat || !combatant) {
     log('Delay turn: combat or combatant not found', data);
     return;
+  }
+
+  // Only the combatant's actor owner (or another GM) can delay its turn.
+  // Without this check, any connected player could craft a payload for any combatant.
+  if (requesterId && requesterId !== game.user.id) {
+    const requester = game.users.get(requesterId);
+    const isRequesterGM = !!requester?.isGM;
+    const requesterOwns = combatant.actor?.testUserPermission(requester, 'OWNER');
+    if (!isRequesterGM && !requesterOwns) {
+      warn(`Rejected delayTurn from user ${requesterId} for combatant ${combatant.name} (not owner)`);
+      return;
+    }
   }
 
   const originalInit = combatant.initiative;
@@ -737,10 +749,11 @@ async function _gmExecuteDelay(data) {
   const displayInit = data.newInitiative;
   debug(`GM executed delay: ${combatant.name} from ${originalInit} to ${displayInit}`);
 
-  ChatMessage.create({
-    content: `<strong>${combatant.name}</strong> delays their turn to initiative ${displayInit}.`,
-    speaker: ChatMessage.getSpeaker({ token: combatant.token?.object })
-  });
+  if (combatant.actor) {
+    postMaskedChat(combatant.actor, (displayName) =>
+      `<strong>${displayName}</strong> delays their turn to initiative ${displayInit}.`
+    );
+  }
 }
 
 /* ========================================
@@ -1180,10 +1193,9 @@ async function _handleBleedStaunch(actor, token, name, maxHP) {
 
   if (staunch) {
     systemUpdates['system.ap.value'] = currentAP - 2;
-    ChatMessage.create({
-      content: `<strong>${name}</strong> staunches their bleeding (2 AP spent).`,
-      speaker: { alias: name }
-    });
+    postMaskedChat(actor, (displayName) =>
+      `<strong>${displayName}</strong> staunches their bleeding (2 AP spent).`
+    );
   } else {
     // Bleed damage goes through temp HP first
     let remaining = bleedDmg;
@@ -1205,10 +1217,9 @@ async function _handleBleedStaunch(actor, token, name, maxHP) {
     }
 
     const breakdownStr = breakdown.length > 0 ? ` (${breakdown.join(', ')})` : '';
-    ChatMessage.create({
-      content: `<strong>${name}</strong> takes ${bleedDmg} true damage from bleeding${breakdownStr}.`,
-      speaker: { alias: name }
-    });
+    postMaskedChat(actor, (displayName) =>
+      `<strong>${displayName}</strong> takes ${bleedDmg} true damage from bleeding${breakdownStr}.`
+    );
     // Play staunch bleeding animation (rapid playback for the damage tick)
     if (token) {
       playStatusAnimation(token, 'StaunchBleeding', true); // Uses StaunchBleedingTick animation

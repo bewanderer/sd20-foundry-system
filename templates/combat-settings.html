@@ -501,6 +501,17 @@
   <!-- Tab: Token UI -->
   <div class="cs-tab-body {{#unless (eq activeTab 'tokenui')}}hidden{{/unless}}" data-tab-body="tokenui">
 
+    {{#if isGM}}
+    <fieldset class="cs-fieldset">
+      <legend>Identity</legend>
+      <label class="cs-checkbox-row">
+        <input type="checkbox" name="nameRevealed" {{#if nameRevealed}}checked{{/if}} />
+        <span>Reveal name to players</span>
+      </label>
+      <p class="cs-hint">When off, players see "???" instead of the creature's name in the Status Panel and threshold chat. GMs and the actor's owner always see the real name.</p>
+    </fieldset>
+    {{/if}}
+
     <fieldset class="cs-fieldset">
       <legend>Token Bar Visibility</legend>
       <p class="cs-hint">Control which resource bars are visible on the token. GM always sees all bars.</p>

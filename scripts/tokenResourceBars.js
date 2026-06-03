@@ -15,8 +15,22 @@ const MODULE = CONFIG.MODULE_ID;
 const _barContainers = new Map();
 
 // Bar configuration
-const BAR_HEIGHT = 14;
+const BAR_HEIGHT = 18;
 const BAR_SPACING = 3;
+
+const BAR_TEXT_STYLE = {
+  fontFamily: 'Signika',
+  fontSize: 16,
+  fontWeight: 'bold',
+  fill: '#ffffff',
+  stroke: '#000000',
+  strokeThickness: 3,
+  align: 'center',
+  padding: 2
+};
+
+// Render PIXI.Text at higher resolution so it stays crisp at any zoom level.
+const BAR_TEXT_RESOLUTION = Math.max(2, window.devicePixelRatio || 1);
 
 /**
  * Register hooks for token resource bars
@@ -394,6 +408,12 @@ function _drawBars(token) {
     border.drawRoundedRect(startX, y, barWidth, BAR_HEIGHT, 3);
     container.addChild(border);
 
+    const hpLabel = new PIXI.Text(`${currentHP + tempHP}/${maxHP}`, BAR_TEXT_STYLE);
+    hpLabel.resolution = BAR_TEXT_RESOLUTION;
+    hpLabel.anchor.set(0.5, 0.5);
+    hpLabel.position.set(Math.round(startX + barWidth / 2), Math.round(y + BAR_HEIGHT / 2));
+    container.addChild(hpLabel);
+
     barIndex++;
   }
 
@@ -428,6 +448,12 @@ function _drawBars(token) {
     border.drawRoundedRect(startX, y, barWidth, BAR_HEIGHT, 3);
     container.addChild(border);
 
+    const fpLabel = new PIXI.Text(`${fp.value}/${fp.max}`, BAR_TEXT_STYLE);
+    fpLabel.resolution = BAR_TEXT_RESOLUTION;
+    fpLabel.anchor.set(0.5, 0.5);
+    fpLabel.position.set(Math.round(startX + barWidth / 2), Math.round(y + BAR_HEIGHT / 2));
+    container.addChild(fpLabel);
+
     barIndex++;
   }
 
@@ -460,6 +486,12 @@ function _drawBars(token) {
     border.lineStyle(1, 0x444444, 1);
     border.drawRoundedRect(startX, y, barWidth, BAR_HEIGHT, 3);
     container.addChild(border);
+
+    const apLabel = new PIXI.Text(`${ap.value}/${ap.max}`, BAR_TEXT_STYLE);
+    apLabel.resolution = BAR_TEXT_RESOLUTION;
+    apLabel.anchor.set(0.5, 0.5);
+    apLabel.position.set(Math.round(startX + barWidth / 2), Math.round(y + BAR_HEIGHT / 2));
+    container.addChild(apLabel);
 
     barIndex++;
   }

@@ -73,6 +73,10 @@ function _buildDefaultChecks(stats) {
 }
 
 async function applyPreset(actor, presetName) {
+  if (!game.user.isGM) {
+    ui.notifications.warn('Only the GM can apply monster presets.');
+    return;
+  }
   const data = await loadPresets();
   const preset = data.presets.find(p => p.name === presetName);
   if (!preset) return;
@@ -317,6 +321,10 @@ export class MonsterPresetSelector extends HandlebarsApplicationMixin(Applicatio
 }
 
 export function openPresetSelector(actor) {
+  if (!game.user.isGM) {
+    ui.notifications.warn('Only the GM can browse monster presets.');
+    return;
+  }
   if (actor.type !== 'npc') {
     ui.notifications.warn('Monster presets are only available for NPC actors');
     return;

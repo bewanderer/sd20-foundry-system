@@ -134,11 +134,17 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     this._isLibraryEdit = options.isLibraryEdit || false;
     this._libraryId = options.libraryId || null;
     this._onSaveCallback = options.onSave || null;
+    // When the macro library opens an aggregated entry, the source actor is
+    // passed in here so the title bar can announce that saves go to the actor.
+    this._aggregatedActor = options.aggregatedActor || null;
 
     // Combat configuration arrays
-    // For app macros, convert legacy dice[] format to combat.damageTypes format
+    // For app macros, convert legacy dice[] format to combat.damageTypes format.
+    // Restricted categories (Initiative / Skill / Knowledge / Stat checks) are
+    // d20 rolls, not damage rolls; converting them produces silently corrupted
+    // PHYSICAL damage entries. Skip the conversion entirely for those.
     let appDamageTypes = existingMacro?.combat?.damageTypes;
-    if (!appDamageTypes?.length && existingMacro?.dice?.length) {
+    if (!isRestricted && !appDamageTypes?.length && existingMacro?.dice?.length) {
       // Convert dice array to damageTypes format with proper scaling support
       appDamageTypes = existingMacro.dice.map((d, i) => {
         // Try to get manual scaling entries from corresponding combat entry if available
@@ -261,7 +267,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       icon: existingMacro?.icon || 'fa-solid fa-star',
       category: existingMacro?.category || this.defaultCategory,
       keywords: existingMacro?.keywords || '',
-      showDescriptionToPlayers: existingMacro?.showDescriptionToPlayers ?? true,
+      showDescriptionToPlayers: existingMacro?.showDescriptionToPlayers ?? !isRestricted,
       apCost: existingMacro?.apCost ?? 0,
       fpCost: existingMacro?.fpCost ?? 0,
       hpCost: existingMacro?.hpCost ?? 0,
@@ -346,10 +352,38 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   };
 
   get title() {
-    if (this.existingMacro) {
-      return this.isAppMacro ? `Edit: ${this.existingMacro.name}` : 'Edit Custom Macro';
+    const macroName = this.existingMacro?.name || 'New Macro';
+    const verb = this.existingMacro ? 'Editing' : 'Creating';
+    const target = this._resolveSaveTarget();
+    if (target) return `${verb} "${macroName}" ${target}`;
+    return this.existingMacro ? (this.isAppMacro ? `Edit: ${macroName}` : 'Edit Custom Macro') : 'Create Custom Macro';
+  }
+
+  /**
+   * Identifies which storage will receive the save so the title bar can warn
+   * the user before they click anything. Mirrors the routing logic in
+   * MacroBar.saveMacroSets and the macro library aggregated-edit handler.
+   */
+  _resolveSaveTarget() {
+    if (this._aggregatedActor) {
+      return `on ${this._aggregatedActor.name} (actor)`;
     }
-    return 'Create Custom Macro';
+    if (this._isLibraryEdit) {
+      return 'in personal macro library';
+    }
+    if (!this.macroBar) return '';
+    if (this.macroBar.tokenId === null || this.macroBar.tokenId === undefined) {
+      const baseActorName = this.macroBar.actor?.name
+        ?? (this.macroBar.actorId ? game.actors.get(this.macroBar.actorId)?.name : null);
+      return baseActorName ? `on ${baseActorName} (actor)` : '';
+    }
+    const token = canvas.tokens?.get(this.macroBar.tokenId);
+    const isUnlinkedNpc = this.macroBar.isUnlinked && !this.macroBar.characterUUID;
+    if (isUnlinkedNpc) {
+      return token ? `on ${token.name} (token only)` : 'on token (unlinked)';
+    }
+    const actorName = this.macroBar.actorId ? game.actors.get(this.macroBar.actorId)?.name : token?.name;
+    return actorName ? `on ${actorName} (actor, syncs to linked tokens)` : '';
   }
 
   _onRender(context, options) {
@@ -913,6 +947,14 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
         merged.manualScalingEntries = item.manualScalingEntries
           ? item.manualScalingEntries.map(e => ({ ...e }))
           : [];
+      }
+      // When entries are present but the source field is missing or neutral, default
+      // to 'manual' so the builder renders the rows instead of hiding them.
+      if (
+        merged.manualScalingEntries?.length > 0 &&
+        (!merged.scalingSource || merged.scalingSource === '' || merged.scalingSource === 'none')
+      ) {
+        merged.scalingSource = 'manual';
       }
       return merged;
     });
@@ -2273,18 +2315,23 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     // Clear legacy dice array to prevent it from being converted back on re-edit
     const dice = [];
 
+    // Restricted categories (Initiative / Skill / Knowledge / Stat checks) are
+    // d20 rolls, not damage rolls. Force their combat arrays to empty so any
+    // accidentally-populated entries cannot silently turn a check into damage.
+    const isRestrictedSave = CustomMacroBuilder.RESTRICTED_CATEGORIES.includes(fd.macroCategory);
+
     // Parse combat configuration from form
     this._saveCombatFormState();
     const combat = {
-      damageTypes: this.combatDamageTypes.length ? this.combatDamageTypes : [],
-      statusEffects: this.combatStatusEffects.length ? this.combatStatusEffects : [],
-      statusConditions: this.combatStatusConditions.length ? this.combatStatusConditions : [],
-      restoration: this.combatRestoration.length ? this.combatRestoration : [],
-      vulnerabilities: this.combatVulnerabilities.length ? this.combatVulnerabilities : [],
+      damageTypes: (!isRestrictedSave && this.combatDamageTypes.length) ? this.combatDamageTypes : [],
+      statusEffects: (!isRestrictedSave && this.combatStatusEffects.length) ? this.combatStatusEffects : [],
+      statusConditions: (!isRestrictedSave && this.combatStatusConditions.length) ? this.combatStatusConditions : [],
+      restoration: (!isRestrictedSave && this.combatRestoration.length) ? this.combatRestoration : [],
+      vulnerabilities: (!isRestrictedSave && this.combatVulnerabilities.length) ? this.combatVulnerabilities : [],
       // CF4: Protection arrays
-      damageProtection: this.combatDamageProtection.length ? this.combatDamageProtection : [],
-      buildupProtection: this.combatBuildupProtection.length ? this.combatBuildupProtection : [],
-      conditionProtection: this.combatConditionProtection.length ? this.combatConditionProtection : [],
+      damageProtection: (!isRestrictedSave && this.combatDamageProtection.length) ? this.combatDamageProtection : [],
+      buildupProtection: (!isRestrictedSave && this.combatBuildupProtection.length) ? this.combatBuildupProtection : [],
+      conditionProtection: (!isRestrictedSave && this.combatConditionProtection.length) ? this.combatConditionProtection : [],
       triggerOnCast: this._primaryTriggerOnCast
     };
     const secondaryCombat = {
@@ -2362,12 +2409,15 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       showDescriptionToPlayers: this._basicFields.showDescriptionToPlayers ?? true,
       macroCategory: fd.macroCategory || 'custom',
       category: this._getSpellCategory(fd.macroCategory, this.existingMacro?.category),
-      // Simple roll (optional XdY + bonus, ignored if diceSides is not set)
-      simpleRoll: {
-        diceCount: parseInt(fd['simpleRoll.diceCount']) || null,
-        diceSides: parseInt(fd['simpleRoll.diceSides']) || null,
-        bonus: parseInt(fd['simpleRoll.bonus']) || 0
-      },
+      // Restricted categories always roll 1d20 + modifier; everything else exposes
+      // the optional XdY + bonus form fields (ignored if diceSides is not set).
+      simpleRoll: isRestrictedSave
+        ? { diceCount: 1, diceSides: 20, bonus: parseInt(fd.scalingBonus) || 0 }
+        : {
+            diceCount: parseInt(fd['simpleRoll.diceCount']) || null,
+            diceSides: parseInt(fd['simpleRoll.diceSides']) || null,
+            bonus: parseInt(fd['simpleRoll.bonus']) || 0
+          },
       // Rest ability (SR/LR with use tracking)
       restAbility: this._restAbility,
       // Animation configuration
@@ -2404,6 +2454,10 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
         await addMacroToLibrary(macro, sourceName);
         debug(`Auto-added "${macro.name}" to library`);
       }
+    }
+
+    if (this._onSaveCallback) {
+      await this._onSaveCallback(macro);
     }
 
     // Close the builder after successful save (validation passed)
@@ -2660,6 +2714,16 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
  * Open the custom macro builder
  */
 export function openCustomMacroBuilder(macroBar, slotIndex = null, existingMacro = null, options = {}) {
+  // Library-edit mode and entry points without a macroBar (e.g. opened directly
+  // for an Actor) skip the ownership gate: the library itself is per-user and
+  // any actor-targeted save path already enforces permissions before writing.
+  if (macroBar && !options.isLibraryEdit) {
+    const actor = macroBar.actorId ? game.actors.get(macroBar.actorId) : null;
+    if (actor && !game.user.isGM && !actor.isOwner) {
+      ui.notifications.warn(`You do not have permission to edit macros for ${actor.name}.`);
+      return;
+    }
+  }
   new CustomMacroBuilder(macroBar, slotIndex, existingMacro, options).render({ force: true });
 }
 

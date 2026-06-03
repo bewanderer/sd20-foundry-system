@@ -371,14 +371,43 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
 
   async _prepareContext() {
     const library = getLibrary();
-    let macros = library.macros || [];
 
-    // Collect unique actor names for the filter dropdown
+    // Walk every actor the user owns and pull each macro out of its macroSets.
+    // Aggregated entries are tagged so the handlers can route Edit and Delete
+    // back to the source actor instead of the per-user library storage.
+    const aggregated = [];
+    const ownedActors = game.actors?.filter(a => a.testUserPermission(game.user, 'OWNER')) || [];
+    for (const actor of ownedActors) {
+      const sets = actor.system?.macroSets?.sets;
+      if (!sets || typeof sets !== 'object') continue;
+      for (const setData of Object.values(sets)) {
+        if (!Array.isArray(setData?.macros)) continue;
+        for (const macro of setData.macros) {
+          if (!macro || !macro.id) continue;
+          aggregated.push({
+            ...macro,
+            libraryId: `agg:${actor.id}:${macro.id}`,
+            sourceActor: actor.name,
+            _aggregatedFromActor: actor.id,
+            _aggregatedMacroId: macro.id
+          });
+        }
+      }
+    }
+
+    // Actor entries win over library entries with the same macro id.
+    const seenIds = new Set(aggregated.map(m => m.id));
+    const libraryEntries = (library.macros || []).filter(m => !seenIds.has(m.id));
+    let macros = [...aggregated, ...libraryEntries];
+
+    // Collect unique actor names for the filter dropdown (library + aggregated)
     const actorNamesSet = new Set();
-    for (const m of library.macros) {
+    for (const m of macros) {
       if (m.sourceActor) actorNamesSet.add(m.sourceActor);
     }
     const actorNames = [...actorNamesSet].sort();
+
+    const combinedTotalCount = macros.length;
 
     // Apply search filter
     if (this.searchQuery) {
@@ -432,7 +461,7 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
       categoryGroups,
       categories: CONFIG.MACRO_CATEGORIES,
       actorNames,
-      totalCount: library.macros?.length || 0,
+      totalCount: combinedTotalCount,
       filteredCount: macros.length,
       selectedCount: this.selectedMacros.size,
       searchQuery: this.searchQuery,
@@ -467,6 +496,31 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
     }
 
     return 'custom';
+  }
+
+  /**
+   * Re-render when an owned actor's macroSets change so aggregated entries
+   * stay in step with edits made elsewhere (actor sheet, other clients).
+   */
+  _onActorUpdate(actor, changes) {
+    if (!this.rendered) return;
+    if (!actor?.testUserPermission?.(game.user, 'OWNER')) return;
+    if (!changes?.system || !('macroSets' in changes.system)) return;
+    this.render();
+  }
+
+  _onFirstRender(context, options) {
+    super._onFirstRender?.(context, options);
+    this._actorUpdateHook = this._onActorUpdate.bind(this);
+    Hooks.on('updateActor', this._actorUpdateHook);
+  }
+
+  _onClose(options) {
+    if (this._actorUpdateHook) {
+      Hooks.off('updateActor', this._actorUpdateHook);
+      this._actorUpdateHook = null;
+    }
+    super._onClose?.(options);
   }
 
   /**
@@ -576,10 +630,9 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
    */
   static async #onCopyToActor(_event, target) {
     const libraryId = target.dataset.libraryId;
-
-    const macroCopy = getMacroCopyFromLibrary(libraryId);
+    const macroCopy = _resolveAggregatedOrLibraryCopy(libraryId);
     if (!macroCopy) {
-      ui.notifications.error('Macro not found in library');
+      ui.notifications.error('Macro source no longer exists.');
       return;
     }
 
@@ -617,7 +670,7 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
 
     let copied = 0;
     for (const libraryId of this.selectedMacros) {
-      const macroCopy = getMacroCopyFromLibrary(libraryId);
+      const macroCopy = _resolveAggregatedOrLibraryCopy(libraryId);
       if (macroCopy) {
         await macroBar.addMacroToSlot(null, macroCopy);
         copied++;
@@ -640,6 +693,42 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
     const libraryId = target.dataset.libraryId;
     const macroName = target.dataset.macroName;
 
+    // Aggregated entry: delete from the actor's macroSets, not the library flag.
+    if (libraryId?.startsWith('agg:')) {
+      const [, actorId, macroId] = libraryId.split(':');
+      const actor = game.actors.get(actorId);
+      if (!actor) {
+        ui.notifications.error('Source actor for this macro was not found.');
+        return;
+      }
+      const confirmed = await DialogV2.confirm({
+        window: { title: 'Delete from Actor' },
+        content: `<p>Remove "<strong>${macroName}</strong>" from <strong>${actor.name}</strong>'s macro sets?</p><p>This deletes the macro on the actor. All token copies and other owners will lose it.</p>`
+      });
+      if (!confirmed) return;
+
+      const fresh = foundry.utils.deepClone(actor.system?.macroSets || {});
+      let removed = false;
+      for (const setData of Object.values(fresh.sets || {})) {
+        const idx = (setData.macros || []).findIndex(m => m?.id === macroId);
+        if (idx >= 0) {
+          setData.macros.splice(idx, 1);
+          removed = true;
+          break;
+        }
+      }
+      if (removed) {
+        await actor.update({ 'system.macroSets': fresh });
+        this.selectedMacros.delete(libraryId);
+        ui.notifications.info(`Removed "${macroName}" from ${actor.name}`);
+        this.render();
+      } else {
+        ui.notifications.warn('Macro was already removed.');
+        this.render();
+      }
+      return;
+    }
+
     const confirmed = await DialogV2.confirm({
       window: { title: 'Delete from Library' },
       content: `<p>Are you sure you want to remove "<strong>${macroName}</strong>" from your library?</p>`
@@ -660,12 +749,35 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
    */
   static async #onDuplicateMacro(_event, target) {
     const libraryId = target.dataset.libraryId;
-
     const library = getLibrary();
-    const original = library.macros.find(m => m.libraryId === libraryId);
-    if (!original) {
-      ui.notifications.error('Macro not found in library');
-      return;
+
+    // Aggregated entries are not in the library; turn the duplicate into a
+    // personal-library copy so the user has their own editable version that
+    // does not affect the source actor.
+    let original = null;
+    let originalIndex = library.macros.length;
+    if (libraryId?.startsWith('agg:')) {
+      const [, actorId, macroId] = libraryId.split(':');
+      const actor = game.actors.get(actorId);
+      const sets = actor?.system?.macroSets?.sets;
+      for (const setData of Object.values(sets || {})) {
+        const found = (setData.macros || []).find(m => m?.id === macroId);
+        if (found) {
+          original = found;
+          break;
+        }
+      }
+      if (!original) {
+        ui.notifications.error('Source macro no longer exists on the actor.');
+        return;
+      }
+    } else {
+      original = library.macros.find(m => m.libraryId === libraryId);
+      if (!original) {
+        ui.notifications.error('Macro not found in library');
+        return;
+      }
+      originalIndex = library.macros.indexOf(original);
     }
 
     // Check library cap
@@ -680,9 +792,10 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
       name: `${original.name} Copy`,
       addedAt: Date.now()
     };
+    delete copy._aggregatedFromActor;
+    delete copy._aggregatedMacroId;
 
-    // Insert right after the original
-    const originalIndex = library.macros.indexOf(original);
+    // Insert right after the original (or at the end for aggregated sources)
     library.macros.splice(originalIndex + 1, 0, copy);
 
     await saveLibrary(library);
@@ -696,6 +809,63 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
   static async #onEditMacro(_event, target) {
     const libraryId = target.dataset.libraryId;
 
+    if (!game.sd20?.openCustomMacroBuilder) {
+      ui.notifications.warn('Custom macro builder not available');
+      return;
+    }
+
+    // Aggregated entries live on an owned actor, not in the library flag.
+    // Open the builder against the actor's macro so saves go back to the
+    // canonical actor.system.macroSets and all owners see the change.
+    if (libraryId?.startsWith('agg:')) {
+      const [, actorId, macroId] = libraryId.split(':');
+      const actor = game.actors.get(actorId);
+      if (!actor) {
+        ui.notifications.error('Source actor for this macro was not found.');
+        return;
+      }
+      const macroSetsClone = foundry.utils.deepClone(actor.system?.macroSets || {});
+      let sourceMacro = null;
+      for (const setData of Object.values(macroSetsClone.sets || {})) {
+        const found = (setData.macros || []).find(m => m?.id === macroId);
+        if (found) { sourceMacro = found; break; }
+      }
+      if (!sourceMacro) {
+        ui.notifications.error('Macro was removed from the source actor.');
+        this.render();
+        return;
+      }
+
+      const self = this;
+      game.sd20.openCustomMacroBuilder(null, null, sourceMacro, {
+        isLibraryEdit: true,
+        libraryId: null,
+        aggregatedActor: actor,
+        appOriginalOverride: sourceMacro._appOriginal || null,
+        onSave: async (updatedMacro) => {
+          const fresh = foundry.utils.deepClone(actor.system?.macroSets || {});
+          let replaced = false;
+          for (const setData of Object.values(fresh.sets || {})) {
+            const idx = (setData.macros || []).findIndex(m => m?.id === macroId);
+            if (idx >= 0) {
+              setData.macros[idx] = updatedMacro;
+              replaced = true;
+              break;
+            }
+          }
+          if (!replaced) {
+            ui.notifications.warn('Macro was removed from the source actor while editing.');
+            self.render();
+            return;
+          }
+          await actor.update({ 'system.macroSets': fresh });
+          ui.notifications.info(`Updated "${updatedMacro.name}" on ${actor.name}`);
+          self.render();
+        }
+      });
+      return;
+    }
+
     const library = getLibrary();
     const macro = library.macros.find(m => m.libraryId === libraryId);
 
@@ -704,23 +874,19 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
       return;
     }
 
-    if (game.sd20?.openCustomMacroBuilder) {
-      // Pass the stored _appOriginal so Reset to App Defaults works without needing an active macro bar
-      const macroBar = game.sd20?.getActiveMacroBar?.();
+    // Pass the stored _appOriginal so Reset to App Defaults works without needing an active macro bar
+    const macroBar = game.sd20?.getActiveMacroBar?.();
 
-      game.sd20.openCustomMacroBuilder(macroBar, null, macro, {
-        isLibraryEdit: true,
-        libraryId: libraryId,
-        appOriginalOverride: macro._appOriginal || null,
-        onSave: async (updatedMacro) => {
-          await updateLibraryMacro(libraryId, updatedMacro);
-          this.render();
-          ui.notifications.info(`Updated "${updatedMacro.name}" in library`);
-        }
-      });
-    } else {
-      ui.notifications.warn('Custom macro builder not available');
-    }
+    game.sd20.openCustomMacroBuilder(macroBar, null, macro, {
+      isLibraryEdit: true,
+      libraryId: libraryId,
+      appOriginalOverride: macro._appOriginal || null,
+      onSave: async (updatedMacro) => {
+        await updateLibraryMacro(libraryId, updatedMacro);
+        this.render();
+        ui.notifications.info(`Updated "${updatedMacro.name}" in library`);
+      }
+    });
   }
 
   /**
@@ -823,6 +989,34 @@ export class MacroLibraryDialog extends HandlebarsApplicationMixin(ApplicationV2
   _hideTooltip() {
     document.querySelectorAll('.sd20-macro-tooltip').forEach(el => el.remove());
   }
+}
+
+/**
+ * Resolve a copy of a macro by the synthetic library id used in the dialog.
+ * Aggregated ids look like `agg:<actorId>:<macroId>`; library ids are the
+ * actual libraryId stored on the user-flag entry.
+ */
+function _resolveAggregatedOrLibraryCopy(libraryId) {
+  if (!libraryId) return null;
+  if (libraryId.startsWith('agg:')) {
+    const [, actorId, macroId] = libraryId.split(':');
+    const actor = game.actors.get(actorId);
+    const sets = actor?.system?.macroSets?.sets;
+    if (!sets) return null;
+    for (const setData of Object.values(sets)) {
+      const found = (setData.macros || []).find(m => m?.id === macroId);
+      if (found) {
+        const copy = foundry.utils.deepClone(found);
+        delete copy.libraryId;
+        delete copy._aggregatedFromActor;
+        delete copy._aggregatedMacroId;
+        copy.id = `${found.id}-${Date.now()}`;
+        return copy;
+      }
+    }
+    return null;
+  }
+  return getMacroCopyFromLibrary(libraryId);
 }
 
 /**

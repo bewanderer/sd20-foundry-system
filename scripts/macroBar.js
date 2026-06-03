@@ -85,6 +85,8 @@ export class MacroBar {
     this.isInactive = false;
     // Permission tracking
     this.isReadOnly = false;
+    // Aborts in-flight refreshMacros() when the bar is closed or a newer refresh starts
+    this._refreshAbortController = null;
   }
 
   /**
@@ -478,10 +480,18 @@ export class MacroBar {
     const manager = game.sd20?.macroManager;
     if (!manager) return;
 
+    if (this._refreshAbortController) {
+      this._refreshAbortController.abort();
+    }
+    const controller = new AbortController();
+    this._refreshAbortController = controller;
+    const signal = controller.signal;
+
     const token = canvas.tokens.get(this.tokenId);
     const actor = token?.actor || null;
     // Use cache by default for faster loading, only force refresh when explicitly requested
     const macros = await manager.getMacros(this.characterUUID, forceRefresh, actor);
+    if (signal.aborted) return;
     debug(`Loaded ${macros.length} macros for character ${this.characterUUID}${forceRefresh ? ' (fresh from App)' : ' (cached)'}`);
 
     // If no macros from App (cache miss or App offline), use saved macros
@@ -582,6 +592,8 @@ export class MacroBar {
         }
       }
     }
+
+    if (signal.aborted) return;
 
     // Store available macros for the macro picker
     this.availableMacros = macros;
@@ -784,9 +796,12 @@ export class MacroBar {
         return merged;
       });
 
+      if (signal.aborted) return;
+
       // Combine: app macros first, then orphaned modified macros, then custom macros
       activeSetData.macros = [...updatedAppMacros, ...orphanedModifiedMacros, ...customMacros];
       await this.saveMacroSets();
+      if (signal.aborted) return;
 
       // Auto-add new app macros to library (batch operation - single save)
       const newAppMacros = macros.filter(m => !existingAppIds.has(m.id));
@@ -795,6 +810,7 @@ export class MacroBar {
         const actor = token?.actor;
         const sourceName = actor?.name || 'Unknown Actor';
         await addMacrosToLibraryBatch(newAppMacros, sourceName);
+        if (signal.aborted) return;
         debug(`Auto-added ${newAppMacros.length} new macros to library from App`);
       }
     }
@@ -1200,12 +1216,6 @@ export class MacroBar {
       }
     }
 
-    // Library button
-    controlsHTML += `
-      <button class="macro-control-btn" data-action="library" title="Macro Library">
-        <i class="fa-solid fa-book"></i>
-      </button>`;
-
     // Rest button
     controlsHTML += `
       <button class="macro-control-btn rest-btn" data-action="rest" title="Take a Rest">
@@ -1321,6 +1331,11 @@ export class MacroBar {
    * Close the macro bar
    */
   close() {
+    if (this._refreshAbortController) {
+      this._refreshAbortController.abort();
+      this._refreshAbortController = null;
+    }
+
     // Clean up document click handler
     if (this._documentClickHandler) {
       document.removeEventListener('click', this._documentClickHandler);
@@ -1418,8 +1433,14 @@ export class MacroBar {
       const hasVariants = macro.isGroup && macro.variants?.length > 1;
       const expandArrow = hasVariants ? '<i class="fa-solid fa-chevron-right variant-arrow"></i>' : '';
 
+      const apCost = parseInt(macro.apCost) || 0;
+      const fpCost = parseInt(macro.fpCost) || 0;
+      const currentAP = actor?.system?.ap?.value ?? Infinity;
+      const currentFP = actor?.system?.fp?.value ?? Infinity;
+      const cannotAfford = apCost > currentAP || fpCost > currentFP;
+
       itemsHTML += `
-        <div class="sd20-macro-dropdown-item ${depleted ? 'uses-depleted' : ''} ${hasVariants ? 'has-variants' : ''}"
+        <div class="sd20-macro-dropdown-item ${depleted ? 'uses-depleted' : ''} ${cannotAfford ? 'cannot-afford' : ''} ${hasVariants ? 'has-variants' : ''}"
              data-macro-index="${index}" ${hasVariants ? 'data-has-variants="true"' : ''}>
           ${hotkeyBadge}
           <i class="${macro.icon || 'fa-solid fa-star'}"></i>
@@ -1557,8 +1578,14 @@ export class MacroBar {
         ? `<span class="macro-scaling">${variant.scalingBonus >= 0 ? '+' : ''}${variant.scalingBonus}</span>`
         : '';
 
+      const vApCost = parseInt(variant.apCost) || 0;
+      const vFpCost = parseInt(variant.fpCost) || 0;
+      const vCurrentAP = actor?.system?.ap?.value ?? Infinity;
+      const vCurrentFP = actor?.system?.fp?.value ?? Infinity;
+      const vCannotAfford = vApCost > vCurrentAP || vFpCost > vCurrentFP;
+
       variantsHTML += `
-        <div class="sd20-variant-item ${depleted ? 'uses-depleted' : ''}" data-variant-index="${index}">
+        <div class="sd20-variant-item ${depleted ? 'uses-depleted' : ''} ${vCannotAfford ? 'cannot-afford' : ''}" data-variant-index="${index}">
           <i class="${variant.icon || 'fa-solid fa-star'}"></i>
           <span class="macro-name">[${variant.catalystName}]</span>
           <span class="macro-costs">
@@ -2910,6 +2937,31 @@ export class MacroBar {
       resolvedTargets = result.targets;
     }
 
+    // Spend AP/FP cost on the casting actor. Skipped on chained executions so
+    // queued follow-up macros do not pay the cost twice for the same player action.
+    if (!_isChainedExecution) {
+      const apCost = parseInt(macro.apCost) || 0;
+      const fpCost = parseInt(macro.fpCost) || 0;
+      if (apCost > 0 || fpCost > 0) {
+        const castingActor = token.actor;
+        const currentAP = castingActor?.system?.ap?.value ?? 0;
+        const currentFP = castingActor?.system?.fp?.value ?? 0;
+        const newAP = Math.max(0, currentAP - apCost);
+        const newFP = Math.max(0, currentFP - fpCost);
+        if (this.isUnlinked && token) {
+          await token.document.update({
+            'delta.system.ap.value': newAP,
+            'delta.system.fp.value': newFP
+          });
+        } else if (castingActor) {
+          await castingActor.update({
+            'system.ap.value': newAP,
+            'system.fp.value': newFP
+          });
+        }
+      }
+    }
+
     // Decrement rest ability uses if applicable
     if (macro.restAbility?.type) {
       const actor = token.actor;
@@ -3076,7 +3128,16 @@ export class MacroBar {
     if (macro.simpleRoll?.diceSides && macro.simpleRoll?.diceCount) {
       const count = macro.simpleRoll.diceCount;
       const sides = macro.simpleRoll.diceSides;
-      const bonus = macro.simpleRoll.bonus || 0;
+      let bonus = macro.simpleRoll.bonus || 0;
+      // NPC default check macros store the actor-derived modifier on `dcBonus`
+      // (e.g. 'stat:dexterity'). Resolve it at roll time so the initiative or
+      // skill check actually reflects the actor's current stats.
+      if (bonus === 0 && macro.dcBonus) {
+        const resolved = this._resolveDCBonus(macro.dcBonus, token);
+        if (typeof resolved === 'number' && !isNaN(resolved)) {
+          bonus = resolved;
+        }
+      }
       let formula = `${count}d${sides}`;
       if (bonus !== 0) {
         formula += bonus > 0 ? ` + ${bonus}` : ` - ${Math.abs(bonus)}`;
@@ -3922,6 +3983,7 @@ export class MacroBar {
     if (!roll || !roll.terms) return '';
 
     const parts = [];
+    let pendingOp = '+';
 
     for (const term of roll.terms) {
       // Handle dice terms (e.g., 2d12)
@@ -3943,17 +4005,18 @@ export class MacroBar {
           parts.push(`<span class="dice-group"><span class="dice-label">d${term.faces}</span>[${diceResults.join(', ')}]</span>`);
         }
       }
-      // Handle numeric terms (flat bonuses)
+      // Track pending operator so the next numeric term reflects its actual sign
+      else if (term.operator) {
+        pendingOp = term.operator;
+      }
+      // Handle numeric terms (flat bonuses) honouring the most recent operator
       else if (term.number !== undefined) {
         const num = term.number;
         if (num !== 0) {
-          const sign = num > 0 && parts.length > 0 ? '+' : '';
-          parts.push(`<span class="dice-bonus">${sign}${num}</span>`);
+          const sign = pendingOp === '-' ? '-' : (parts.length > 0 ? '+' : '');
+          parts.push(`<span class="dice-bonus">${sign}${Math.abs(num)}</span>`);
         }
-      }
-      // Handle operators (+, -)
-      else if (term.operator) {
-        // Operators are handled in the numeric formatting above
+        pendingOp = '+';
       }
     }
 
@@ -4089,11 +4152,14 @@ export class MacroBar {
 
     // Simple roll (non-damage roll configured via Basic Info)
     if (combatResults._simpleRoll) {
+      const isCheck = ['initiative', 'skillChecks', 'knowledgeChecks', 'statChecks'].includes(macro.macroCategory);
+      const breakdownClass = isCheck ? 'check-dice-breakdown' : 'damage-dice-breakdown';
+      const totalClass = isCheck ? 'check-total' : 'damage-total';
       const diceBreakdown = this._renderDiceBreakdown(combatResults._simpleRoll);
-      html += `<div class="macro-card-roll simple-roll">`;
-      html += `<span class="simple-roll-label">Roll:</span>`;
-      html += `<span class="damage-dice-breakdown">${diceBreakdown}</span>`;
-      html += `<span class="damage-total">= ${combatResults._simpleRoll.total}</span>`;
+      html += `<div class="macro-card-roll simple-roll${isCheck ? ' check-roll' : ''}">`;
+      html += `<span class="simple-roll-label">${isCheck ? 'Check' : 'Roll'}:</span>`;
+      html += `<span class="${breakdownClass}">${diceBreakdown}</span>`;
+      html += `<span class="${totalClass}">= ${combatResults._simpleRoll.total}</span>`;
       html += `</div>`;
     }
 

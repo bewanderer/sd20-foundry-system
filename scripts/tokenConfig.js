@@ -78,6 +78,9 @@ async function addSD20Tab(app, html, data) {
   // Get the app's element (the actual dialog window)
   const appEl = app.element instanceof HTMLElement ? app.element : app.element[0] ?? app.element;
 
+  appEl.querySelectorAll('nav.sheet-tabs a[data-tab="sd20-character"]').forEach(el => el.remove());
+  appEl.querySelectorAll('.tab[data-tab="sd20-character"]').forEach(el => el.remove());
+
   // Find tab navigation in the app element
   const tabNavItems = appEl.querySelectorAll('nav.sheet-tabs a');
   const lastTabNav = tabNavItems.length ? tabNavItems[tabNavItems.length - 1] : null;

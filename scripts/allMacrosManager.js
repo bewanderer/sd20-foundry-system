@@ -602,7 +602,10 @@ export class AllMacrosManager extends HandlebarsApplicationMixin(ApplicationV2) 
    */
   static #onImportFromLibrary() {
     if (game.sd20?.openMacroCopyDialog) {
-      game.sd20.openMacroCopyDialog(this.macroBar);
+      const self = this;
+      game.sd20.openMacroCopyDialog(this.macroBar, {
+        onImport: () => self.render()
+      });
     } else {
       ui.notifications.warn('Import dialog not available');
     }

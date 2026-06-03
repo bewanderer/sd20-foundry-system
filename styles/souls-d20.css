@@ -399,6 +399,111 @@ body.game .app select:focus {
 }
 
 /* ========================================
+   App Account Dialog + Pairing Code Form
+   ======================================== */
+.sd20-account-dialog {
+  min-width: 20rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sd20-account-row {
+  margin: 0;
+  color: var(--sd20-text-primary);
+}
+
+.sd20-account-uuid code {
+  font-size: 0.75rem;
+  color: var(--sd20-text-ghost);
+}
+
+.sd20-account-hint {
+  color: var(--sd20-text-ghost);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.sd20-auth-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--sd20-text-ghost);
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--sd20-text-secondary);
+}
+
+.sd20-auth-status .sd20-auth-signout {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.sd20-auth-steps {
+  margin: 0.25rem 0 0.75rem 1.25rem;
+  padding: 0;
+  color: var(--sd20-text-ghost);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.sd20-auth-steps li {
+  margin-bottom: 0.25rem;
+}
+
+.sd20-auth-steps strong {
+  color: var(--sd20-text-primary);
+}
+
+.sd20-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sd20-auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--sd20-text-ghost);
+}
+
+.sd20-auth-form input {
+  width: 100%;
+  font-family: var(--sd20-font-mono, monospace);
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sd20-auth-submit {
+  margin-top: 0.25rem;
+  align-self: flex-start;
+}
+
+.sd20-auth-error {
+  margin: 0;
+  padding: 0.375rem 0.5rem;
+  background: rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.6);
+  border-radius: 0.25rem;
+  color: #f5b5bb;
+  font-size: 0.8rem;
+}
+
+.sd20-auth-loading {
+  text-align: center;
+  font-style: italic;
+  color: var(--sd20-text-ghost);
+  padding: 1rem;
+}
+
+/* ========================================
    Token Link Dialog (Handlebars template)
    ======================================== */
 .souls-d20-link-dialog {
@@ -970,7 +1075,8 @@ body.game .app select:focus {
   color: var(--sd20-red);
 }
 
-.sd20-macro-dropdown-item.uses-depleted {
+.sd20-macro-dropdown-item.uses-depleted,
+.sd20-macro-dropdown-item.cannot-afford {
   opacity: 0.6;
 }
 
@@ -1054,7 +1160,8 @@ body.game .app select:focus {
   flex-shrink: 0;
 }
 
-.sd20-variant-item.uses-depleted {
+.sd20-variant-item.uses-depleted,
+.sd20-variant-item.cannot-afford {
   opacity: 0.6;
 }
 
@@ -1476,6 +1583,22 @@ body.game .app select:focus {
   margin-bottom: 0.5rem;
 }
 
+.sd20-macro-card .macro-card-description.gm-only {
+  border-left: 2px dashed var(--sd20-orange, #ffa500);
+  padding-left: 0.4rem;
+  position: relative;
+}
+
+.sd20-macro-card .macro-card-description.gm-only::before {
+  content: '[GM only]';
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--sd20-orange, #ffa500);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.15rem;
+}
+
 .sd20-macro-card .macro-card-stats {
   display: flex;
   flex-wrap: wrap;
@@ -1550,6 +1673,24 @@ body.game .app select:focus {
   color: var(--sd20-text-dim);
   font-weight: 600;
   text-transform: uppercase;
+}
+
+.sd20-macro-card .check-dice-breakdown {
+  font-size: 0.85rem;
+  color: var(--sd20-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sd20-macro-card .check-total {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--sd20-blue, #58a6ff);
+}
+
+.sd20-macro-card .macro-card-roll.check-roll {
+  border-left: 3px solid var(--sd20-blue, #58a6ff);
 }
 
 /* Legacy damage display (fallback) */
@@ -4998,6 +5139,15 @@ body.game .sd20-macro-library input[type="text"] {
   outline: 1px solid var(--sd20-green-20);
 }
 
+.sd20-macro-library .library-macro-item.from-actor {
+  border-left: 2px solid var(--sd20-blue, #58a6ff);
+}
+
+.sd20-macro-library .library-macro-item.from-actor .macro-source {
+  color: var(--sd20-blue, #58a6ff);
+  font-weight: 600;
+}
+
 .sd20-macro-library .library-macro-item .macro-select-checkbox {
   cursor: pointer;
   width: 0.875rem;
@@ -6704,13 +6854,31 @@ body.game .sd20-macro-library input[type="text"] {
 /* Status Panel Tabs */
 .status-panel-tabs {
   display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 0.25rem;
   border-bottom: 1px solid var(--sp-border);
   padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sp-border) transparent;
+}
+
+.status-panel-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.status-panel-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.status-panel-tabs::-webkit-scrollbar-thumb {
+  background: var(--sp-border);
+  border-radius: 3px;
 }
 
 .sp-tab {
-  flex: 1;
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 0.35rem 0.5rem;
   background: transparent;
   border: 1px solid transparent;
@@ -7518,9 +7686,10 @@ body.game .sd20-macro-library input[type="text"] {
 }
 
 .sd20-status-trigger small {
-  color: var(--sd20-text-muted, #999);
+  color: var(--sd20-red, #d33f3f);
   display: block;
   margin-top: 0.25rem;
+  font-weight: 500;
 }
 
 /* ============================================================

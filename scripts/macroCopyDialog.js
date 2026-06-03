@@ -55,6 +55,9 @@ export class MacroCopyDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     this.selectedMacros = new Set();
     this._expandedCategories = new Set();
     this._searchDebounceTimer = null;
+    // Optional caller-supplied callback fired after each successful import so the
+    // opening dialog (e.g. All Macros Manager) can refresh its view.
+    this._onImportCallback = options.onImport || null;
   }
 
   async _prepareContext() {
@@ -276,6 +279,9 @@ export class MacroCopyDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     await this.macroBar.addMacroToSlot(null, macroCopy);
     ui.notifications.info(`Imported "${macroCopy.name}" to macro bar`);
+    if (this._onImportCallback) {
+      await this._onImportCallback();
+    }
   }
 
   static async #onImportSelected() {
@@ -302,6 +308,9 @@ export class MacroCopyDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       ui.notifications.info(`Imported ${imported} macro${imported > 1 ? 's' : ''} to macro bar`);
       this.selectedMacros.clear();
       this.render();
+      if (this._onImportCallback) {
+        await this._onImportCallback();
+      }
     } else {
       ui.notifications.warn('No macros could be imported');
     }
@@ -389,12 +398,12 @@ export class MacroCopyDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 /**
  * Open the macro copy dialog
  */
-export function openMacroCopyDialog(macroBar) {
+export function openMacroCopyDialog(macroBar, options = {}) {
   if (!macroBar) {
     ui.notifications.warn('Select a linked token first');
     return;
   }
-  new MacroCopyDialog(macroBar).render({ force: true });
+  new MacroCopyDialog(macroBar, options).render({ force: true });
 }
 
 /**
