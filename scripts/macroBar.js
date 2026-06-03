@@ -11,6 +11,7 @@ import { resolveTargets } from './targetingSystem.js';
 import { setExecutionContext, clearExecutionContext } from './sd20Api.js';
 import { playMacroAnimation, isAnimationSystemAvailable, selectAnimationTarget, animationNeedsTarget, cancelActiveGridSelection } from './animationSystem.js';
 import { resetActorToBlank, resetTokenToBlank, orphanAllTokensOfActor } from './characterSync.js';
+import { postMaskedChat } from './permissions.js';
 
 const { DialogV2 } = foundry.applications.api;
 
@@ -2408,14 +2409,13 @@ export class MacroBar {
     await this.saveMacroSets();
     this.render();
 
-    // Send chat message
+    // postMaskedChat dual-emits: insiders (GM + actor owners) see the real
+    // name, outsiders see '???'. The render hook in souls-d20.js takes care
+    // of the speaker header on all other macro-roll chat cards as well.
     const restLabel = type === 'short' ? 'short rest' : 'long rest';
-    const content = `<div class="sd20-rest-message"><strong>${actor.name}</strong> took a <em>${restLabel}</em>.</div>`;
-    await ChatMessage.create({
-      speaker: ChatMessage.getSpeaker({ actor, token }),
-      content,
-      type: CONST.CHAT_MESSAGE_STYLES.EMOTE
-    });
+    postMaskedChat(actor, (displayName) =>
+      `<div class="sd20-rest-message"><strong>${displayName}</strong> took a <em>${restLabel}</em>.</div>`
+    );
 
     const resetMsg = abilitiesReset > 0 ? ` ${abilitiesReset} abilities reset.` : '';
     ui.notifications.info(`${actor.name} took a ${restLabel}. HP, FP, AP restored.${resetMsg}`);

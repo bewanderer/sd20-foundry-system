@@ -9,6 +9,7 @@ import { SD20ActorSheet } from './sd20-actor-sheet.js';
 import { BroadcastChannelManager } from './broadcastChannel.js';
 import { log } from './utils.js';
 import { registerCharacterSyncHandlers } from './characterSync.js';
+import { canSeeActorName } from './permissions.js';
 import { initializeStatusIndicator, destroyStatusIndicator } from './statusIndicator.js';
 import { registerTurnIndicator, registerTurnIndicatorSettings } from './turnIndicator.js';
 import { registerCombatTracker, registerCombatTrackerSettings } from './combatTracker.js';
@@ -299,17 +300,73 @@ Hooks.once('ready', async () => {
     return true;
   };
 
-  // V13 hook: html is a native HTMLElement
-  Hooks.on('renderChatMessageHTML', (message, html) => {
-    if (!shouldStripGmOnly(message)) return;
-    html.querySelectorAll('.macro-card-description.gm-only').forEach(node => node.remove());
-  });
+  // Resolve to the SYNTHETIC actor for unlinked NPC tokens (the per-token
+  // delta where 'nameRevealed' is actually stored), falling back to the base
+  // actor for everything else.
+  const resolveSpeakerActor = (message) => {
+    const tokenId = message.speaker?.token;
+    const sceneId = message.speaker?.scene;
+    if (tokenId && sceneId) {
+      const scene = game.scenes?.get(sceneId);
+      const tokenDoc = scene?.tokens?.get(tokenId);
+      if (tokenDoc?.actor) return tokenDoc.actor;
+    }
+    const actorId = message.speaker?.actor;
+    return actorId ? game.actors.get(actorId) : null;
+  };
 
-  // V11/V12 hook: html is a jQuery wrapper; fires only on those versions
-  Hooks.on('renderChatMessage', (message, html) => {
-    if (!shouldStripGmOnly(message)) return;
-    html.find('.macro-card-description.gm-only').remove();
-  });
+  const resolveMaskedActor = (uuid) => {
+    if (!uuid) return null;
+    try {
+      const direct = fromUuidSync(uuid);
+      if (direct) return direct;
+    } catch { /* fall through */ }
+    // Manual walk for cases where fromUuidSync returns null (some V13 builds
+    // do this for synthetic actors that live inside a token delta).
+    const parts = uuid.split('.');
+    if (parts[0] === 'Actor' && parts[1]) {
+      return game.actors?.get(parts[1]) ?? null;
+    }
+    if (parts[0] === 'Scene' && parts[2] === 'Token' && parts[1] && parts[3]) {
+      const scene = game.scenes?.get(parts[1]);
+      const tokenDoc = scene?.tokens?.get(parts[3]);
+      return tokenDoc?.actor ?? null;
+    }
+    return null;
+  };
+
+  const maskV13 = (message, html) => {
+    if (shouldStripGmOnly(message)) {
+      html.querySelectorAll('.macro-card-description.gm-only').forEach(n => n.remove());
+    }
+    const speakerActor = resolveSpeakerActor(message);
+    if (speakerActor && !canSeeActorName(speakerActor)) {
+      html.querySelectorAll('.message-sender, .message-metadata .message-actor').forEach(n => {
+        n.textContent = '???';
+      });
+    }
+    html.querySelectorAll('[data-mask-actor]').forEach(span => {
+      const actor = resolveMaskedActor(span.getAttribute('data-mask-actor'));
+      if (actor && !canSeeActorName(actor)) span.textContent = '???';
+    });
+  };
+
+  const maskV12 = (message, html) => {
+    if (shouldStripGmOnly(message)) {
+      html.find('.macro-card-description.gm-only').remove();
+    }
+    const speakerActor = resolveSpeakerActor(message);
+    if (speakerActor && !canSeeActorName(speakerActor)) {
+      html.find('.message-sender, .message-metadata .message-actor').text('???');
+    }
+    html.find('[data-mask-actor]').each((_, span) => {
+      const actor = resolveMaskedActor(span.getAttribute('data-mask-actor'));
+      if (actor && !canSeeActorName(actor)) span.textContent = '???';
+    });
+  };
+
+  Hooks.on('renderChatMessageHTML', maskV13);
+  Hooks.on('renderChatMessage', maskV12);
 
   // Set NPC tokens to be unlinked by default (each token gets independent data)
   Hooks.on('preCreateActor', (actor) => {
