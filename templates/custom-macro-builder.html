@@ -46,8 +46,8 @@
 
     <div class="form-group">
       <label>Modifier</label>
-      <input type="number" name="scalingBonus" value="{{scalingBonus}}" />
-      <p class="hint">The bonus added to the 1d20 roll.</p>
+      <input type="text" inputmode="numeric" pattern="^[+\-]?\d+$" name="scalingBonus" value="{{scalingBonus}}" placeholder="0" />
+      <p class="hint">The bonus added to the 1d20 roll. Examples: +3, -2, 5.</p>
     </div>
 
     <div class="form-group">
@@ -165,7 +165,7 @@
               <option value="100" {{#if (eq simpleRoll.diceSides 100)}}selected{{/if}}>100</option>
             </select>
             <span class="field-label">+</span>
-            <input type="number" name="simpleRoll.bonus" {{#if simpleRoll.bonus}}value="{{simpleRoll.bonus}}"{{/if}} placeholder="0" class="input-sm" title="Flat bonus" />
+            <input type="text" inputmode="numeric" pattern="^[+\-]?\d+$" name="simpleRoll.bonus" {{#if simpleRoll.bonus}}value="{{simpleRoll.bonus}}"{{/if}} placeholder="0" class="input-sm" title="Flat bonus (e.g. +3, -2, 5)" />
           </div>
           <p class="hint">Optional simple roll (non-damage). Ignored unless dice type is selected.</p>
         </div>

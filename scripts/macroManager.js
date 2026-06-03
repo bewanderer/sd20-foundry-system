@@ -337,26 +337,25 @@ export class MacroManager {
         return;
       }
 
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        debug(`Combat data request timed out for ${uuid}`);
-        bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE);
-        this.pendingRequests.delete(requestKey);
-        resolve(null);
-      }, this.requestTimeout);
-
-      // Listen for response using the bcm.on() method
-      const handler = (data, message) => {
-        // Match by uuid and optionally actorId if provided
+      // Listen for response using the bcm.on() method. handler is declared
+      // first so both the timeout and the inline match path can off() this
+      // SPECIFIC handler without clobbering characterSync's persistent one.
+      const handler = (data) => {
         if (data?.uuid === uuid && (!actorId || data?.actorId === actorId)) {
           clearTimeout(timeoutId);
-          bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE);
+          bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
           this.pendingRequests.delete(requestKey);
-
           debug(`Received combat data for ${uuid}${actorId ? ` (actor: ${actorId})` : ''}`);
           resolve(data);
         }
       };
+
+      const timeoutId = setTimeout(() => {
+        debug(`Combat data request timed out for ${uuid}`);
+        bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
+        this.pendingRequests.delete(requestKey);
+        resolve(null);
+      }, this.requestTimeout);
 
       bcm.on(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
 

@@ -118,33 +118,29 @@ export class BroadcastChannelManager {
    * Handle incoming messages
    */
   handleMessage(message) {
-    // Log for debugging
     log('Received message:', message);
-
-    if (!validateMessage(message)) {
-      return;
-    }
-
+    if (!validateMessage(message)) return;
     debug('Received valid message:', message);
 
-    // Handle handshake
     if (message.type === CONFIG.MESSAGE_TYPES.APP_HANDSHAKE) {
       this.handleHandshake(message.data);
-      // Also notify any registered handlers
-      const handler = this.messageHandlers.get(message.type);
-      if (handler) {
-        handler(message.data, message);
-      }
-      return;
     }
 
-    // Route message to registered handlers
-    const handler = this.messageHandlers.get(message.type);
-    if (handler) {
-      handler(message.data, message);
-    } else {
-      // Some handlers are temporary (e.g. combat:response-data), so use debug not warn
-      debug('No handler registered for message type:', message.type);
+    this._dispatch(message.type, message);
+  }
+
+  _dispatch(type, message) {
+    const handlers = this.messageHandlers.get(type);
+    if (!handlers || handlers.size === 0) {
+      debug('No handler registered for message type:', type);
+      return;
+    }
+    for (const handler of Array.from(handlers)) {
+      try {
+        handler(message.data, message);
+      } catch (err) {
+        error(`Handler for ${type} threw:`, err);
+      }
     }
   }
 
@@ -193,19 +189,27 @@ export class BroadcastChannelManager {
     }
   }
 
-  /**
-   * Register message handler
-   */
+  // Multiple consumers can register handlers for the same message type.
+  // Each registers its OWN function; off() removes only that specific handler
+  // so other consumers' subscriptions survive. Pass no handler to off() to
+  // clear every subscription for that type (legacy callers).
   on(messageType, handler) {
-    this.messageHandlers.set(messageType, handler);
+    if (!this.messageHandlers.has(messageType)) {
+      this.messageHandlers.set(messageType, new Set());
+    }
+    this.messageHandlers.get(messageType).add(handler);
     debug(`Registered handler for: ${messageType}`);
   }
 
-  /**
-   * Unregister message handler
-   */
-  off(messageType) {
-    this.messageHandlers.delete(messageType);
+  off(messageType, handler) {
+    const handlers = this.messageHandlers.get(messageType);
+    if (!handlers) return;
+    if (handler) {
+      handlers.delete(handler);
+      if (handlers.size === 0) this.messageHandlers.delete(messageType);
+    } else {
+      this.messageHandlers.delete(messageType);
+    }
     debug(`Unregistered handler for: ${messageType}`);
   }
 

@@ -1427,6 +1427,12 @@ body.game .app select:focus {
   margin-bottom: 0.25rem;
 }
 
+.sd20-macro-tooltip .tooltip-dice {
+  font-size: 0.75rem;
+  color: var(--sd20-text-primary);
+  margin-bottom: 0.125rem;
+}
+
 .sd20-macro-tooltip .tooltip-stats {
   display: flex;
   gap: 0.5rem;

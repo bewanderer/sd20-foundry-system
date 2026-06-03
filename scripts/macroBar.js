@@ -10,6 +10,7 @@ import { addMacrosToLibraryBatch } from './macroLibrary.js';
 import { resolveTargets } from './targetingSystem.js';
 import { setExecutionContext, clearExecutionContext } from './sd20Api.js';
 import { playMacroAnimation, isAnimationSystemAvailable, selectAnimationTarget, animationNeedsTarget, cancelActiveGridSelection } from './animationSystem.js';
+import { resetActorToBlank, resetTokenToBlank, orphanAllTokensOfActor } from './characterSync.js';
 
 const { DialogV2 } = foundry.applications.api;
 
@@ -1702,6 +1703,80 @@ export class MacroBar {
     return colors[type] || '#4caf50'; // Default green
   }
 
+  // Tooltip-side mirror of _rollCombatComponent's scaling resolver. Returns
+  // the same number the executor would push into the dice formula, so the
+  // tooltip can show the resolved value (e.g. 1d2 frost + 4 from STR D-Full)
+  // instead of a bare 1d2.
+  _resolveComponentScaling(component, macro) {
+    if (!component?.scalingSource) return 0;
+    const damageType = (component.type || 'PHYSICAL').toUpperCase();
+
+    if (component.scalingSource === 'weapon') {
+      if (macro?.scalingBonusByType && typeof macro.scalingBonusByType === 'object') {
+        return macro.scalingBonusByType[damageType]
+          ?? macro.scalingBonusByType[damageType.toLowerCase()]
+          ?? 0;
+      }
+      return this._resolveWeaponScalingByType(component.weaponHand || 'mainHand', damageType);
+    }
+    if (component.scalingSource === 'spell' || component.scalingSource === 'spirit') {
+      return macro?.scalingBonus || 0;
+    }
+    if (component.scalingSource === 'manual' && component.manualScalingEntries?.length) {
+      return this._resolveManualScalingEntries(component.manualScalingEntries);
+    }
+    if (component.scalingSource.includes(':')) {
+      const token = canvas.tokens.get(this.tokenId);
+      const actor = token?.actor || game.actors.get(this.actorId);
+      if (actor?.type === 'npc') {
+        return this._resolveMonsterScaling(component.scalingSource, actor);
+      }
+    }
+    return 0;
+  }
+
+  // Renders one combat-component formula row as "<dice> + <flat> + <scaling>"
+  // with the system's standard inline coloring. flat = gold, scaling = green
+  // (positive) or red (negative). Returns the joined parts; callers prepend
+  // their own type label.
+  _renderComponentFormula(component, macro, colors) {
+    const parts = [];
+    if (component.diceCount && component.diceSides) {
+      parts.push(`${component.diceCount}d${component.diceSides}`);
+    }
+    if (component.flatBonus) {
+      const sign = component.flatBonus > 0 ? '+' : '';
+      parts.push(`<span style="color:${colors.flat}">${sign}${component.flatBonus}</span>`);
+    }
+    const scaling = this._resolveComponentScaling(component, macro);
+    if (scaling !== 0) {
+      const color = scaling < 0 ? '#ff6b6b' : colors.scaling;
+      const sign = scaling > 0 ? '+' : '';
+      parts.push(`<span style="color:${color}">${sign}${scaling}</span>`);
+    }
+    return parts.join(' ') || '0';
+  }
+
+  // Returns { diceFormula, bonus } for a skill-check macro. simpleRoll is the
+  // modern shape; dice[] + scalingBonus is the legacy one some untouched
+  // template-default macros still carry.
+  _getCheckMacroDiceAndBonus(macro) {
+    if (macro.simpleRoll?.diceCount && macro.simpleRoll?.diceSides) {
+      return {
+        diceFormula: `${macro.simpleRoll.diceCount}d${macro.simpleRoll.diceSides}`,
+        bonus: macro.simpleRoll.bonus || 0
+      };
+    }
+    if (Array.isArray(macro.dice) && macro.dice.length > 0) {
+      const die = macro.dice[0];
+      return {
+        diceFormula: `${die.count || 1}d${die.sides || die.value || 20}`,
+        bonus: macro.scalingBonus || 0
+      };
+    }
+    return null;
+  }
+
   /**
    * Show tooltip for a macro
    * F1: Unified styling with proper section ordering and colors
@@ -1743,68 +1818,31 @@ export class MacroBar {
       tooltipHTML += `</div>`;
     }
 
-    // Check if this is a skill-check type macro (Initiative, Skill Checks, Knowledge, Stat Checks)
-    // These don't have damage/combat sections - info is already shown in the header/stats area
-    const isSkillCheckMacro = macro.type === CONFIG.MACRO_TYPES.SKILL_CHECK;
+    // Initiative / Skill Checks / Knowledge / Stat Checks. Covers both
+    // system-generated check macros (type=SKILL_CHECK) and user-customized
+    // ones edited in the builder (still saved into one of these categories).
+    const isSkillCheckMacro = macro.type === CONFIG.MACRO_TYPES.SKILL_CHECK
+      || ['initiative', 'skillChecks', 'knowledgeChecks', 'statChecks'].includes(macro.macroCategory);
+
+    if (isSkillCheckMacro) {
+      const info = this._getCheckMacroDiceAndBonus(macro);
+      if (info) {
+        tooltipHTML += `<div class="tooltip-dice">Dice: <strong>${info.diceFormula}</strong></div>`;
+        const color = info.bonus < 0 ? '#ff6b6b' : COLOR_SCALING;
+        const sign = info.bonus > 0 ? '+' : '';
+        tooltipHTML += `<div class="tooltip-scaling">Scaling: <span style="color:${color}">${sign}${info.bonus}</span></div>`;
+      }
+    }
+
+    const componentColors = { flat: COLOR_FLAT_BONUS, scaling: COLOR_SCALING };
 
     // ============ SECTION 1: DAMAGE ============
-    // Skip damage sections for skill check macros
     const damageTypes = macro.combat?.damageTypes || [];
-    let hasManualScalingInDamage = false; // Track if manual scaling was displayed in damage section
     if (!isSkillCheckMacro && damageTypes.length > 0) {
       tooltipHTML += `<div class="tooltip-section tooltip-section-damage">`;
       tooltipHTML += `<div class="tooltip-section-label">Damage</div>`;
       for (const dt of damageTypes) {
-        const parts = [];
-        // Dice (white/default color)
-        if (dt.diceCount && dt.diceSides) {
-          parts.push(`${dt.diceCount}d${dt.diceSides}`);
-        }
-        // Flat bonus (gold color)
-        if (dt.flatBonus) {
-          const sign = dt.flatBonus > 0 ? '+' : '';
-          parts.push(`<span style="color:${COLOR_FLAT_BONUS}">${sign}${dt.flatBonus}</span>`);
-        }
-        // Weapon scaling - resolve actual value per damage type (green color) - CF1
-        if (dt.scalingSource === 'weapon') {
-          const hand = dt.weaponHand || 'mainHand';
-          const damageType = (dt.type || 'PHYSICAL').toUpperCase();
-
-          // CF1/CF3: First try macro's own scalingBonusByType (handles trick weapon forms correctly)
-          let scalingValue = 0;
-          if (macro.scalingBonusByType && typeof macro.scalingBonusByType === 'object') {
-            // Try exact match first, then case-insensitive match
-            scalingValue = macro.scalingBonusByType[damageType]
-              ?? macro.scalingBonusByType[damageType.toLowerCase()]
-              ?? 0;
-          } else {
-            scalingValue = this._resolveWeaponScalingByType(hand, damageType);
-          }
-
-          if (scalingValue !== 0) {
-            const color = scalingValue < 0 ? '#ff6b6b' : COLOR_SCALING;
-            const sign = scalingValue > 0 ? '+' : '';
-            parts.push(`<span style="color:${color}">${sign}${scalingValue}</span>`);
-          }
-        } else if (dt.scalingSource === 'spell' || dt.scalingSource === 'spirit') {
-          // Spell/Spirit scaling - use macro's total scalingBonus for all damage types
-          const scalingValue = macro.scalingBonus || 0;
-          if (scalingValue !== 0) {
-            const color = scalingValue < 0 ? '#ff6b6b' : COLOR_SCALING;
-            const sign = scalingValue > 0 ? '+' : '';
-            parts.push(`<span style="color:${color}">${sign}${scalingValue}</span>`);
-          }
-        } else if (dt.scalingSource === 'manual' && dt.manualScalingEntries?.length > 0) {
-          // Resolve manualScalingEntries dynamically from stat values
-          const scalingValue = this._resolveManualScalingEntries(dt.manualScalingEntries);
-          if (scalingValue !== 0) {
-            const color = scalingValue < 0 ? '#ff6b6b' : COLOR_SCALING;
-            const sign = scalingValue > 0 ? '+' : '';
-            parts.push(`<span style="color:${color}">${sign}${scalingValue}</span>`);
-            hasManualScalingInDamage = true; // Track that scaling was displayed
-          }
-        }
-        const formula = parts.join(' ') || '0';
+        const formula = this._renderComponentFormula(dt, macro, componentColors);
         const typeColor = this._getDamageTypeColor(dt.type);
         tooltipHTML += `<div class="tooltip-row"><span class="tooltip-type" style="color:${typeColor}">${dt.type || 'PHYSICAL'}</span><span class="tooltip-formula">${formula}</span></div>`;
       }
@@ -1823,19 +1861,12 @@ export class MacroBar {
     }
 
     // ============ SECTION 2: STATUS BUILDUP ============
-    // Skip for skill check macros
     const statusEffects = macro.combat?.statusEffects || [];
     if (!isSkillCheckMacro && statusEffects.length > 0) {
       tooltipHTML += `<div class="tooltip-section tooltip-section-buildup">`;
       tooltipHTML += `<div class="tooltip-section-label">Status Buildup</div>`;
       for (const eff of statusEffects) {
-        const parts = [];
-        if (eff.diceCount && eff.diceSides) parts.push(`${eff.diceCount}d${eff.diceSides}`);
-        if (eff.flatBonus) {
-          const sign = eff.flatBonus > 0 ? '+' : '';
-          parts.push(`<span style="color:${COLOR_FLAT_BONUS}">${sign}${eff.flatBonus}</span>`);
-        }
-        const formula = parts.join(' ') || '0';
+        const formula = this._renderComponentFormula(eff, macro, componentColors);
         const effectColor = this._getStatusEffectColor(eff.name);
         tooltipHTML += `<div class="tooltip-row"><span class="tooltip-type" style="color:${effectColor}">${eff.name}</span><span class="tooltip-formula">${formula}</span></div>`;
       }
@@ -1859,19 +1890,12 @@ export class MacroBar {
     }
 
     // ============ SECTION 4: RESTORATION ============
-    // Skip for skill check macros
     const restoration = macro.combat?.restoration || [];
     if (!isSkillCheckMacro && restoration.length > 0) {
       tooltipHTML += `<div class="tooltip-section tooltip-section-restoration">`;
       tooltipHTML += `<div class="tooltip-section-label">Restoration</div>`;
       for (const rest of restoration) {
-        const parts = [];
-        if (rest.diceCount && rest.diceSides) parts.push(`${rest.diceCount}d${rest.diceSides}`);
-        if (rest.flatBonus) {
-          const sign = rest.flatBonus > 0 ? '+' : '';
-          parts.push(`<span style="color:${COLOR_FLAT_BONUS}">${sign}${rest.flatBonus}</span>`);
-        }
-        const formula = parts.join(' ') || '0';
+        const formula = this._renderComponentFormula(rest, macro, componentColors);
         const restColor = this._getRestorationColor(rest.type);
         const typeLabel = rest.type === 'heal-hp' ? 'Heal HP' :
                           rest.type === 'restore-fp' ? 'Restore FP' :
@@ -1899,8 +1923,14 @@ export class MacroBar {
         const protColor = this._getDamageTypeColor(prot.type);
         const parts = [];
         if (prot.tiers) parts.push(`+${prot.tiers}T`);
-        if (prot.flat) parts.push(`+${prot.flat} flat`);
         if (prot.diceCount && prot.diceSides) parts.push(`${prot.diceCount}d${prot.diceSides}`);
+        if (prot.flat) parts.push(`<span style="color:${COLOR_FLAT_BONUS}">+${prot.flat} flat</span>`);
+        const scaling = this._resolveComponentScaling(prot, macro);
+        if (scaling !== 0) {
+          const color = scaling < 0 ? '#ff6b6b' : COLOR_SCALING;
+          const sign = scaling > 0 ? '+' : '';
+          parts.push(`<span style="color:${color}">${sign}${scaling}</span>`);
+        }
         if (prot.percentage) parts.push(`${prot.percentage}%`);
         const durParts = [];
         if (prot.durationTurns) durParts.push(`${prot.durationTurns} rds`);
@@ -1912,8 +1942,14 @@ export class MacroBar {
       for (const prot of buildupProtection) {
         const protColor = this._getStatusEffectColor(prot.type);
         const parts = [];
-        if (prot.flat) parts.push(`+${prot.flat} flat`);
         if (prot.diceCount && prot.diceSides) parts.push(`${prot.diceCount}d${prot.diceSides}`);
+        if (prot.flat) parts.push(`<span style="color:${COLOR_FLAT_BONUS}">+${prot.flat} flat</span>`);
+        const scaling = this._resolveComponentScaling(prot, macro);
+        if (scaling !== 0) {
+          const color = scaling < 0 ? '#ff6b6b' : COLOR_SCALING;
+          const sign = scaling > 0 ? '+' : '';
+          parts.push(`<span style="color:${color}">${sign}${scaling}</span>`);
+        }
         if (prot.percentage) parts.push(`${prot.percentage}%`);
         const durParts = [];
         if (prot.durationTurns) durParts.push(`${prot.durationTurns} rds`);
@@ -1932,29 +1968,6 @@ export class MacroBar {
       }
 
       tooltipHTML += `</div>`;
-    }
-
-    // ============ SCALING SUMMARY ============
-    // CF1: Display per-type scaling bonuses if available
-    // Skip for skill check macros (they show bonus in the roll section)
-    if (!isSkillCheckMacro && macro.scalingBonusByType && Object.keys(macro.scalingBonusByType).length > 0) {
-      const entries = Object.entries(macro.scalingBonusByType)
-        .filter(([_, bonus]) => bonus !== 0)
-        .map(([type, bonus]) => {
-          const color = bonus < 0 ? '#ff6b6b' : COLOR_SCALING;
-          const sign = bonus > 0 ? '+' : '';
-          const typeLabel = type.charAt(0) + type.slice(1).toLowerCase();
-          const typeColor = this._getDamageTypeColor(type);
-          return `<span style="color:${typeColor}">${typeLabel}</span>: <span style="color:${color}">${sign}${bonus}</span>`;
-        });
-      if (entries.length > 0) {
-        tooltipHTML += `<div class="tooltip-scaling">Scaling: ${entries.join(', ')}</div>`;
-      }
-    } else if (!isSkillCheckMacro && !hasManualScalingInDamage && macro.scalingBonus && macro.scalingBonus !== 0) {
-      // Fallback to total scaling for older macros (only if manual scaling wasn't already shown)
-      const color = macro.scalingBonus < 0 ? '#ff6b6b' : COLOR_SCALING;
-      const sign = macro.scalingBonus > 0 ? '+' : '';
-      tooltipHTML += `<div class="tooltip-scaling">Scaling: <span style="color:${color}">${sign}${macro.scalingBonus}</span></div>`;
     }
 
     tooltipHTML += `</div>`;
@@ -2616,30 +2629,27 @@ export class MacroBar {
   async _performUnlink(scope, actor, token, characterUUID, charName, actorName) {
     switch (scope) {
       case 'actor':
-        // Clear character link from Actor but keep macros
+        // Soft: tokens on canvas keep their data forever, but the actor goes
+        // back to a blank state so future drags-from-actor make blank tokens.
+        // Mark existing tokens as orphaned BEFORE clearing the actor so the
+        // updateActor hook (which can fan out) does not touch them.
         if (actor) {
+          await orphanAllTokensOfActor(actor);
           await actor.update({ 'system.characterUUID': '' });
         }
-        // Also clear any legacy token-level flags (only if they exist)
-        if (token.document.getFlag(CONFIG.MODULE_ID, 'characterUUID') !== undefined) {
-          await token.document.unsetFlag(CONFIG.MODULE_ID, 'characterUUID');
-        }
-        ui.notifications.info(`Actor "${actorName}" unlinked from "${charName}". Macro sets preserved.`);
+        ui.notifications.info(`Actor "${actorName}" unlinked from "${charName}". Existing tokens preserved.`);
         break;
 
       case 'both':
-        // Clear everything from Actor
+        // Hard: blank this specific token, blank the actor, leave other tokens
+        // of the same actor alone. Linked ones will follow the now-blank actor
+        // automatically; unlinked ones keep their delta.
         if (actor) {
-          await actor.update({ 'system.characterUUID': '', 'system.macroSets': null });
+          await actor.update({ 'system.characterUUID': '' });
+          await resetActorToBlank(actor);
         }
-        // Also clear legacy token-level flags (only if they exist)
-        if (token.document.getFlag(CONFIG.MODULE_ID, 'characterUUID') !== undefined) {
-          await token.document.unsetFlag(CONFIG.MODULE_ID, 'characterUUID');
-        }
-        if (token.document.getFlag(CONFIG.MODULE_ID, 'macroSets') !== undefined) {
-          await token.document.unsetFlag(CONFIG.MODULE_ID, 'macroSets');
-        }
-        ui.notifications.info(`Actor "${actorName}" fully unlinked. All macro data cleared.`);
+        await resetTokenToBlank(token.document);
+        ui.notifications.info(`"${actorName}" unlinked. Actor and this token cleared.`);
         break;
     }
 

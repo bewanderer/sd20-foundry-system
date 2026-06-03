@@ -57,42 +57,196 @@ export function registerCharacterSyncHandlers() {
     }
 
     if (!newUUID && oldUUID) {
-      log(`Character unlinked from "${actor.name}", resetting App-synced fields to template defaults`);
-      const templateStats = {
-        vitality: { value: 10, mod: 0 },
-        endurance: { value: 10, mod: 0 },
-        strength: { value: 10, mod: 0 },
-        dexterity: { value: 10, mod: 0 },
-        attunement: { value: 10, mod: 0 },
-        intelligence: { value: 10, mod: 0 },
-        faith: { value: 10, mod: 0 }
-      };
-      try {
-        await actor.update({
-          'system.hp': { value: 0, max: 0 },
-          'system.fp': { value: 0, max: 0 },
-          'system.ap': { value: 8, max: 8 },
-          'system.level': 0,
-          'system.stats': templateStats,
-          'system.equippedWeapons': null,
-          [`flags.${CONFIG.MODULE_ID}.characterData`]: null,
-          [`flags.${CONFIG.MODULE_ID}.skills`]: null,
-          [`flags.${CONFIG.MODULE_ID}.knowledge`]: null,
-          [`flags.${CONFIG.MODULE_ID}.equipment`]: null,
-          [`flags.${CONFIG.MODULE_ID}.attuned_spells`]: null,
-          [`flags.${CONFIG.MODULE_ID}.attuned_spirits`]: null,
-          [`flags.${CONFIG.MODULE_ID}.attuned_weapon_skills`]: null,
-          [`flags.${CONFIG.MODULE_ID}.combat`]: null,
-          [`flags.${CONFIG.MODULE_ID}.statMods`]: null
-        });
-      } catch (err) {
-        warn(`Failed to reset actor "${actor.name}" on unlink:`, err);
-      }
+      // Soft default. Whether data is wiped is decided by the caller of the
+      // unlink action (macroBar._performUnlink picks 'actor' or 'both'); the
+      // hook itself only notifies the App that this UUID is no longer linked.
+      log(`Character unlinked from "${actor.name}"`);
       requestLinkedCharacterData();
     }
   });
 
   log('Character sync handlers registered');
+}
+
+// Mirrors actor.system + SD20 flags onto every existing token of this actor.
+// Linked tokens get a visual refresh (they already inherit from the actor);
+// unlinked tokens have their delta and flags rewritten so the new max HP/FP/AP,
+// equipment, resistances and other synced fields actually appear on the bars
+// and macro bar of tokens that were placed BEFORE the link happened.
+//
+// Tokens flagged as orphaned (from a prior soft-unlink) are skipped so they
+// keep the snapshot the user wanted to preserve.
+async function _syncTokensFromActor(actor) {
+  if (!actor?.id || !game.scenes) return;
+
+  const SYSTEM_KEYS = ['hp', 'fp', 'ap', 'level', 'stats', 'equippedWeapons'];
+  const FLAG_KEYS = [
+    'characterData', 'characterUUID', 'skills', 'knowledge', 'equipment',
+    'attuned_spells', 'attuned_spirits', 'attuned_weapon_skills',
+    'combat', 'combatSettings', 'statMods', 'macroSets'
+  ];
+
+  const systemSnapshot = {};
+  for (const key of SYSTEM_KEYS) {
+    const value = actor.system?.[key];
+    if (value !== undefined) {
+      systemSnapshot[`delta.system.${key}`] = foundry.utils.deepClone(value);
+    }
+  }
+
+  const flagsSnapshot = {};
+  for (const key of FLAG_KEYS) {
+    const value = actor.getFlag(CONFIG.MODULE_ID, key);
+    if (value !== undefined && value !== null) {
+      flagsSnapshot[`flags.${CONFIG.MODULE_ID}.${key}`] = foundry.utils.deepClone(value);
+    }
+  }
+
+  for (const scene of game.scenes) {
+    const updates = [];
+    for (const tokenDoc of scene.tokens) {
+      if (tokenDoc.actorId !== actor.id) continue;
+      if (tokenDoc.getFlag(CONFIG.MODULE_ID, 'orphaned')) continue;
+      const update = { _id: tokenDoc.id, ...flagsSnapshot };
+      if (!tokenDoc.actorLink) Object.assign(update, systemSnapshot);
+      updates.push(update);
+    }
+    if (updates.length === 0) continue;
+    try {
+      await scene.updateEmbeddedDocuments('Token', updates);
+    } catch (err) {
+      warn(`Failed to sync tokens on scene "${scene.name}":`, err);
+    }
+  }
+
+  if (canvas?.tokens?.placeables) {
+    for (const placed of canvas.tokens.placeables) {
+      if (placed.document.actorId === actor.id
+          && !placed.document.getFlag(CONFIG.MODULE_ID, 'orphaned')) {
+        placed.refresh();
+      }
+    }
+  }
+}
+
+function _templateStats() {
+  return {
+    vitality: { value: 10, mod: 0 },
+    endurance: { value: 10, mod: 0 },
+    strength: { value: 10, mod: 0 },
+    dexterity: { value: 10, mod: 0 },
+    attunement: { value: 10, mod: 0 },
+    intelligence: { value: 10, mod: 0 },
+    faith: { value: 10, mod: 0 }
+  };
+}
+
+function _templateSkills() {
+  return {
+    Athletics: 0, Acrobatics: 0, Perception: 0, FireKeeping: 0,
+    Sanity: 0, Stealth: 0, Precision: 0, Diplomacy: 0
+  };
+}
+
+function _templateKnowledge() {
+  return { Magics: 0, WorldHistory: 0, Monsters: 0, Cosmic: 0 };
+}
+
+// Wipes the actor's App-synced system fields + SD20 flags back to template
+// defaults. Does NOT touch any tokens on canvas. Caller decides whether to
+// also reset specific tokens or leave them (orphaned snapshots).
+export async function resetActorToBlank(actor) {
+  if (!actor?.id) return;
+  try {
+    await actor.update({
+      'system.hp': { value: 0, max: 0 },
+      'system.fp': { value: 0, max: 0 },
+      'system.ap': { value: 8, max: 8 },
+      'system.level': 0,
+      'system.stats': _templateStats(),
+      'system.skills': _templateSkills(),
+      'system.knowledge': _templateKnowledge(),
+      'system.equippedWeapons': null,
+      'system.macroSets': null,
+      [`flags.${CONFIG.MODULE_ID}.characterData`]: null,
+      [`flags.${CONFIG.MODULE_ID}.skills`]: null,
+      [`flags.${CONFIG.MODULE_ID}.knowledge`]: null,
+      [`flags.${CONFIG.MODULE_ID}.equipment`]: null,
+      [`flags.${CONFIG.MODULE_ID}.attuned_spells`]: null,
+      [`flags.${CONFIG.MODULE_ID}.attuned_spirits`]: null,
+      [`flags.${CONFIG.MODULE_ID}.attuned_weapon_skills`]: null,
+      [`flags.${CONFIG.MODULE_ID}.combat`]: null,
+      [`flags.${CONFIG.MODULE_ID}.statMods`]: null
+    });
+  } catch (err) {
+    warn(`Failed to reset actor "${actor.name}":`, err);
+  }
+}
+
+// Wipes one token's delta + SD20 flags back to blank. Used by the hard-unlink
+// path to clear ONLY the clicked token. Other tokens of the same actor are
+// left alone (linked ones follow the actor, unlinked ones keep their delta).
+export async function resetTokenToBlank(tokenDoc) {
+  if (!tokenDoc) return;
+  const clearedFlags = {
+    [`flags.${CONFIG.MODULE_ID}.characterUUID`]: null,
+    [`flags.${CONFIG.MODULE_ID}.characterData`]: null,
+    [`flags.${CONFIG.MODULE_ID}.skills`]: null,
+    [`flags.${CONFIG.MODULE_ID}.knowledge`]: null,
+    [`flags.${CONFIG.MODULE_ID}.equipment`]: null,
+    [`flags.${CONFIG.MODULE_ID}.attuned_spells`]: null,
+    [`flags.${CONFIG.MODULE_ID}.attuned_spirits`]: null,
+    [`flags.${CONFIG.MODULE_ID}.attuned_weapon_skills`]: null,
+    [`flags.${CONFIG.MODULE_ID}.combat`]: null,
+    [`flags.${CONFIG.MODULE_ID}.combatSettings`]: null,
+    [`flags.${CONFIG.MODULE_ID}.statMods`]: null,
+    [`flags.${CONFIG.MODULE_ID}.macroSets`]: null,
+    [`flags.${CONFIG.MODULE_ID}.orphaned`]: null
+  };
+  const update = { ...clearedFlags };
+  if (!tokenDoc.actorLink) {
+    update['delta.system.hp'] = { value: 0, max: 0 };
+    update['delta.system.fp'] = { value: 0, max: 0 };
+    update['delta.system.ap'] = { value: 8, max: 8 };
+    update['delta.system.level'] = 0;
+    update['delta.system.stats'] = _templateStats();
+    update['delta.system.skills'] = _templateSkills();
+    update['delta.system.knowledge'] = _templateKnowledge();
+    update['delta.system.equippedWeapons'] = null;
+    update['delta.system.resistances'] = null;
+    update['delta.system.skillBonuses'] = null;
+  }
+  try {
+    await tokenDoc.update(update);
+  } catch (err) {
+    warn(`Failed to reset token "${tokenDoc.name}":`, err);
+  }
+  const placed = canvas?.tokens?.get(tokenDoc.id);
+  if (placed) placed.refresh();
+}
+
+// Soft-unlink helper. Marks every existing token of this actor as orphaned so
+// future actor-level syncs (link, unlink, re-link) skip them. Tokens keep
+// whatever data they had at this moment as a snapshot.
+export async function orphanAllTokensOfActor(actor) {
+  if (!actor?.id || !game.scenes) return;
+  for (const scene of game.scenes) {
+    const updates = [];
+    for (const tokenDoc of scene.tokens) {
+      if (tokenDoc.actorId !== actor.id) continue;
+      if (tokenDoc.getFlag(CONFIG.MODULE_ID, 'orphaned')) continue;
+      updates.push({
+        _id: tokenDoc.id,
+        [`flags.${CONFIG.MODULE_ID}.orphaned`]: true
+      });
+    }
+    if (updates.length === 0) continue;
+    try {
+      await scene.updateEmbeddedDocuments('Token', updates);
+    } catch (err) {
+      warn(`Failed to orphan tokens on scene "${scene.name}":`, err);
+    }
+  }
 }
 
 /**
@@ -194,6 +348,7 @@ async function handleCombatDataResponse(data) {
     const actor = game.actors.get(actorId);
     if (actor && actor.system?.characterUUID === uuid) {
       await updateActorFromCharacterData(actor, { uuid, ...characterData });
+      await _syncTokensFromActor(actor);
       ui.notifications.info(`Character data synced for ${actor.name}`);
 
       // Trigger macro bar refresh if this actor's token is selected
@@ -205,7 +360,7 @@ async function handleCombatDataResponse(data) {
     }
   } else {
     // No specific actor, update all actors with this UUID
-    updateActorsFromCharacterData({ uuid, ...characterData });
+    await updateActorsFromCharacterData({ uuid, ...characterData });
   }
 }
 
@@ -222,6 +377,7 @@ async function updateActorsFromCharacterData(charData) {
 
   for (const actor of linkedActors) {
     await updateActorFromCharacterData(actor, charData);
+    await _syncTokensFromActor(actor);
   }
 }
 

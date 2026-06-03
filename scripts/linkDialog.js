@@ -224,7 +224,18 @@ function attachHandlers(root, state, tokenDoc, configApp) {
   bindCharacterListHandlers(root, state, tokenDoc, configApp);
 }
 
+function findLinkButton(root) {
+  const dialogRoot = root.closest('dialog') || root.ownerDocument || root;
+  return dialogRoot.querySelector('button[data-action="link"]');
+}
+
 function bindSignInHandlers(root, state, tokenDoc, configApp) {
+  // The Link Selected button doesn't apply until the user has paired and the
+  // character list is showing. Hide it so it's not even visible during the
+  // pairing-code form.
+  const linkBtn = findLinkButton(root);
+  if (linkBtn) linkBtn.style.display = 'none';
+
   const submit = root.querySelector('.sd20-auth-submit');
   const codeInput = root.querySelector('input[name="sd20-pairing-code"]');
 
@@ -271,10 +282,17 @@ function showAuthError(root, message) {
 
 function bindCharacterListHandlers(root, state, tokenDoc, configApp) {
   const items = root.querySelectorAll('.character-item');
+  const linkBtn = findLinkButton(root);
+  if (linkBtn) {
+    linkBtn.style.display = '';
+    linkBtn.disabled = true;
+  }
+
   items.forEach(item => {
     item.addEventListener('click', () => {
       items.forEach(i => i.classList.remove('selected'));
       item.classList.add('selected');
+      if (linkBtn) linkBtn.disabled = false;
     });
     item.addEventListener('dblclick', async () => {
       const uuid = item.dataset.uuid;

@@ -8,7 +8,6 @@ import { CONFIG as SD20_CONFIG } from './config.js';
 import { SD20ActorSheet } from './sd20-actor-sheet.js';
 import { BroadcastChannelManager } from './broadcastChannel.js';
 import { log } from './utils.js';
-import { registerTokenConfigTab } from './tokenConfig.js';
 import { registerCharacterSyncHandlers } from './characterSync.js';
 import { initializeStatusIndicator, destroyStatusIndicator } from './statusIndicator.js';
 import { registerTurnIndicator, registerTurnIndicatorSettings } from './turnIndicator.js';
@@ -229,9 +228,6 @@ Hooks.once('ready', async () => {
 
   // Initialize BroadcastChannel communication
   game.sd20.broadcastChannel = new BroadcastChannelManager();
-
-  // Register token config tab for character linking
-  registerTokenConfigTab();
 
   // Register character sync handlers
   registerCharacterSyncHandlers();
