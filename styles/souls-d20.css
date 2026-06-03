@@ -1078,6 +1078,8 @@ body.game .app select:focus {
 .sd20-macro-dropdown-item.uses-depleted,
 .sd20-macro-dropdown-item.cannot-afford {
   opacity: 0.6;
+  outline: 1px solid var(--sd20-red);
+  outline-offset: -1px;
 }
 
 /* Grouped macro with variants (spell/spirit with multiple catalysts) */
@@ -1163,6 +1165,8 @@ body.game .app select:focus {
 .sd20-variant-item.uses-depleted,
 .sd20-variant-item.cannot-afford {
   opacity: 0.6;
+  outline: 1px solid var(--sd20-red);
+  outline-offset: -1px;
 }
 
 /* Rest button in macro bar */

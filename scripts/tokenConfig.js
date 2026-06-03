@@ -55,7 +55,7 @@ async function addSD20Tab(app, html, data) {
   const linkedUUID = actor?.system?.characterUUID
     || actor?.getFlag(CONFIG.MODULE_ID, 'characterUUID')
     || tokenDoc.getFlag(CONFIG.MODULE_ID, 'characterUUID');
-  const linkedCharacter = linkedUUID ? game.sd20.characters[linkedUUID] : null;
+  const linkedCharacter = resolveLinkedCharacter(linkedUUID, actor);
 
   // Create tab button
   const tabButton = htmlToElement(`
@@ -124,6 +124,26 @@ async function addSD20Tab(app, html, data) {
 
   // Activate event listeners
   activateSD20TabListeners(appEl, tokenDoc, app);
+}
+
+// The link state is driven by actor.system.characterUUID (the persistent
+// reference), not by the in-memory game.sd20.characters cache, which is empty
+// when the App isn't connected. Fall back to the actor's last-cached payload,
+// then to actor system data, so the UI matches the macro bar even offline.
+function resolveLinkedCharacter(linkedUUID, actor) {
+  if (!linkedUUID) return null;
+  const cached = game.sd20?.characters?.[linkedUUID];
+  if (cached) return cached;
+  const flagData = actor?.getFlag(CONFIG.MODULE_ID, 'characterData');
+  if (flagData) return flagData;
+  return {
+    name: actor?.name || 'Linked Character',
+    level: actor?.system?.level,
+    currentHP: actor?.system?.hp?.value,
+    maxHP: actor?.system?.hp?.max,
+    currentFP: actor?.system?.fp?.value,
+    maxFP: actor?.system?.fp?.max
+  };
 }
 
 /**
