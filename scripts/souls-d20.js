@@ -36,6 +36,7 @@ import { registerAoEGridHighlight } from './aoeGridHighlight.js';
 import { registerAoERepeatUI } from './aoeRepeatUI.js';
 import { registerAnimationSettings, initAnimationSystem, animationAPI } from './animationSystem.js';
 import { registerAppAuthSettings } from './appAuth.js';
+import { registerInitiativeModalSettings, initInitiativeModal } from './initiativeModal.js';
 
 // Initialize system
 Hooks.once('init', () => {
@@ -206,6 +207,8 @@ Hooks.once('init', () => {
 
   registerAppAuthSettings();
 
+  registerInitiativeModalSettings();
+
   // Register movement pre-hook early (needs to capture position before move)
   registerMovementPreHook();
 
@@ -239,6 +242,7 @@ Hooks.once('ready', async () => {
   // Register combat tracker enhancements
   registerTurnIndicator();
   registerCombatTracker();
+  initInitiativeModal();
 
   // Register macro system
   registerMacroManager();
@@ -335,6 +339,23 @@ Hooks.once('ready', async () => {
     return null;
   };
 
+  // Foundry's built-in roll-from-tracker (e.g. combat.rollInitiative) puts the
+  // token/actor name into the chat card's flavor text and sometimes into the
+  // dice tooltip. Walk text nodes in those regions and substitute '???' so the
+  // name doesn't survive the speaker mask the way we already do for SD20 macros.
+  const maskNameInElement = (root, realName) => {
+    if (!root || !realName) return;
+    const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+    for (const n of nodes) {
+      if (n.nodeValue.includes(realName)) {
+        n.nodeValue = n.nodeValue.split(realName).join('???');
+      }
+    }
+  };
+
   const maskV13 = (message, html) => {
     if (shouldStripGmOnly(message)) {
       html.querySelectorAll('.macro-card-description.gm-only').forEach(n => n.remove());
@@ -344,6 +365,12 @@ Hooks.once('ready', async () => {
       html.querySelectorAll('.message-sender, .message-metadata .message-actor').forEach(n => {
         n.textContent = '???';
       });
+      const realName = speakerActor.name;
+      if (realName) {
+        html.querySelectorAll('.flavor-text, .message-content').forEach(region => {
+          maskNameInElement(region, realName);
+        });
+      }
     }
     html.querySelectorAll('[data-mask-actor]').forEach(span => {
       const actor = resolveMaskedActor(span.getAttribute('data-mask-actor'));
@@ -358,6 +385,12 @@ Hooks.once('ready', async () => {
     const speakerActor = resolveSpeakerActor(message);
     if (speakerActor && !canSeeActorName(speakerActor)) {
       html.find('.message-sender, .message-metadata .message-actor').text('???');
+      const realName = speakerActor.name;
+      if (realName) {
+        html.find('.flavor-text, .message-content').each((_, region) => {
+          maskNameInElement(region, realName);
+        });
+      }
     }
     html.find('[data-mask-actor]').each((_, span) => {
       const actor = resolveMaskedActor(span.getAttribute('data-mask-actor'));

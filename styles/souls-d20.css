@@ -8224,3 +8224,348 @@ body.game .sd20-macro-library input[type="text"] {
   padding: 2rem;
   color: var(--sd20-text-subtle);
 }
+
+.sd20-init-tab.is-active i,
+.sd20-init-tab button.is-active i,
+.sd20-init-tab.is-active,
+.sd20-init-tab button.is-active {
+  color: var(--sd20-green);
+}
+
+.sd20-init-modal {
+  position: fixed;
+  z-index: 65;
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--sd20-text-primary);
+  font-family: inherit;
+  user-select: none;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+}
+
+.sd20-init-modal.is-horizontal {
+  flex-direction: row;
+  align-items: center;
+}
+
+.sd20-init-modal.is-vertical {
+  flex-direction: column;
+  align-items: center;
+}
+
+.sd20-init-modal.is-dragging {
+  cursor: grabbing;
+  opacity: 0.92;
+}
+
+.sd20-init-modal .im-meta {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.3rem;
+  cursor: grab;
+}
+
+.sd20-init-modal.is-horizontal .im-meta {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.sd20-init-modal.is-vertical .im-meta {
+  flex-direction: row;
+  align-items: center;
+}
+
+.sd20-init-modal .im-meta:active { cursor: grabbing; }
+
+.sd20-init-modal .im-round {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--sd20-surface-dark);
+  border: 1px solid var(--sd20-gold);
+  border-radius: 0.3rem;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.sd20-init-modal .im-round-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sd20-text-muted);
+  line-height: 1;
+}
+
+.sd20-init-modal .im-round-num {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--sd20-gold);
+  line-height: 1.1;
+}
+
+.sd20-init-modal .im-round.is-round-out-fwd {
+  opacity: 0;
+  transform: translateX(-0.6rem) scale(0.75);
+}
+.sd20-init-modal .im-round.is-round-out-back {
+  opacity: 0;
+  transform: translateX(0.6rem) scale(0.75);
+}
+.sd20-init-modal .im-round.is-round-in-fwd {
+  animation: sd20InitRoundInFwd 0.25s ease-out;
+}
+.sd20-init-modal .im-round.is-round-in-back {
+  animation: sd20InitRoundInBack 0.25s ease-out;
+}
+
+@keyframes sd20InitRoundInFwd {
+  from { opacity: 0; transform: translateX(0.6rem) scale(0.75); }
+  to   { opacity: 1; transform: translateX(0)      scale(1); }
+}
+@keyframes sd20InitRoundInBack {
+  from { opacity: 0; transform: translateX(-0.6rem) scale(0.75); }
+  to   { opacity: 1; transform: translateX(0)       scale(1); }
+}
+
+.sd20-init-modal .im-track {
+  display: flex;
+  gap: 0.3rem;
+  align-items: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 140, 140, 0.45) transparent;
+}
+
+.sd20-init-modal.is-horizontal .im-track {
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: calc(7 * 4rem + 6 * 0.3rem + 0.4rem + 0.6rem);
+}
+
+.sd20-init-modal.is-vertical .im-track {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(7 * 4.4rem + 6 * 0.3rem + 0.4rem + 0.6rem);
+}
+
+.sd20-init-modal .im-track::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.sd20-init-modal .im-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sd20-init-modal .im-track::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 140, 0.45);
+  border-radius: 3px;
+}
+
+.sd20-init-modal .im-track::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 180, 180, 0.6);
+}
+
+.sd20-init-modal .im-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  width: 4rem;
+  padding: 0.3rem 0.2rem 0.25rem;
+  background: var(--sd20-surface-dark);
+  border: 1px solid var(--sd20-border-default);
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.25s, opacity 0.25s;
+}
+
+.sd20-init-modal .im-cell:hover {
+  border-color: var(--sd20-gold);
+  box-shadow: 0 0 0 1px var(--sd20-gold-50);
+}
+
+.sd20-init-modal .im-cell.is-active {
+  background: rgba(76, 175, 80, 0.95);
+  border-color: rgba(76, 175, 80, 0.95);
+  box-shadow: 0 0 6px var(--sd20-green-50);
+}
+
+.sd20-init-modal .im-cell.is-active .im-img {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.sd20-init-modal .im-cell.is-active.is-defeated {
+  background: rgba(76, 175, 80, 0.55);
+}
+
+.sd20-init-modal .im-cell.is-defeated {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+
+.sd20-init-modal .im-cell.is-unseen {
+  background: var(--sd20-surface-darkest);
+}
+
+.sd20-init-modal .im-img {
+  width: 2.4rem;
+  height: 2.4rem;
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+  border: 1px solid var(--sd20-border-light);
+  margin-bottom: 0.25rem;
+}
+
+.sd20-init-modal .im-img-unknown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sd20-surface-input);
+  color: var(--sd20-text-muted);
+  font-size: 1.1rem;
+}
+
+.sd20-init-modal .im-name {
+  display: block;
+  max-width: 100%;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd20-text-secondary);
+}
+
+.sd20-init-modal .im-cell.is-active .im-name {
+  color: #fff;
+  font-weight: 600;
+}
+
+.sd20-init-modal .im-controls {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto;
+  grid-auto-rows: auto;
+  gap: 0.25rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.sd20-init-modal .im-controls.is-empty {
+  display: none;
+}
+
+.sd20-init-modal .im-btn {
+  width: 1.4rem;
+  height: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sd20-surface-medium);
+  border: 1px solid var(--sd20-border-default);
+  border-radius: 0.2rem;
+  color: var(--sd20-text-secondary);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sd20-init-modal .im-btn:hover {
+  background: var(--sd20-surface-hover);
+  color: var(--sd20-text-primary);
+}
+
+.sd20-init-modal .im-btn-prev:hover { border-color: var(--sd20-orange); color: var(--sd20-orange); }
+.sd20-init-modal .im-btn-next:hover { border-color: var(--sd20-green);  color: var(--sd20-green); }
+.sd20-init-modal .im-btn-end:hover  { border-color: var(--sd20-red);    color: var(--sd20-red); }
+.sd20-init-modal .im-btn-delay:hover{ border-color: var(--sd20-gold);   color: var(--sd20-gold); }
+
+.sd20-init-modal .im-divider {
+  flex: 0 0 auto;
+  background: var(--sd20-red);
+  border-radius: 1px;
+  opacity: 0.75;
+  align-self: stretch;
+}
+
+.sd20-init-modal.is-horizontal .im-divider {
+  width: 6px;
+  margin: 0.2rem 0;
+}
+
+.sd20-init-modal.is-vertical .im-divider {
+  height: 6px;
+  margin: 0 0.2rem;
+}
+
+.sd20-init-modal .im-flip {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sd20-surface-dark);
+  border: 1px solid var(--sd20-border-default);
+  border-radius: 0.2rem;
+  color: var(--sd20-text-muted);
+  font-size: 0.7rem;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.sd20-init-modal .im-flip:hover {
+  color: var(--sd20-gold);
+  border-color: var(--sd20-gold);
+}
+
+.sd20-init-modal .im-cell.is-poofing-forward {
+  animation: sd20InitPoofFwd 0.3s ease-in forwards;
+}
+.sd20-init-modal .im-cell.is-poofing-back {
+  animation: sd20InitPoofBack 0.3s ease-in forwards;
+}
+
+@keyframes sd20InitPoofFwd {
+  to { opacity: 0; transform: scale(0.55) translateX(-0.8rem) rotate(-10deg); filter: blur(2px); }
+}
+@keyframes sd20InitPoofBack {
+  to { opacity: 0; transform: scale(0.55) translateX(0.8rem) rotate(10deg); filter: blur(2px); }
+}
+
+.sd20-init-modal .im-cell.is-arriving-forward {
+  animation: sd20InitSlideFwd 0.25s ease-out;
+}
+.sd20-init-modal .im-cell.is-arriving-back {
+  animation: sd20InitSlideBack 0.25s ease-out;
+}
+
+@keyframes sd20InitSlideFwd {
+  from { transform: translateX(2rem); opacity: 0.4; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@keyframes sd20InitSlideBack {
+  from { transform: translateX(-2rem); opacity: 0.4; }
+  to   { transform: translateX(0);      opacity: 1; }
+}

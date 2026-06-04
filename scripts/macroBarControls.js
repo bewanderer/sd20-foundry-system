@@ -7,6 +7,7 @@ import { CONFIG } from './config.js';
 import { log, debug } from './utils.js';
 import { showMacroBar, closeMacroBar } from './macroBar.js';
 import { openAppAccountDialog } from './appAccountDialog.js';
+import { toggleInitiativeModal } from './initiativeModal.js';
 
 /**
  * Register settings for macro bar visibility (call during init)
@@ -234,6 +235,23 @@ function _injectSidebarLibraryButton() {
 
     accountLi.appendChild(accountBtn);
     menu.appendChild(accountLi);
+
+    const initLi = document.createElement('li');
+    initLi.classList.add('sd20-init-tab');
+
+    const initBtn = document.createElement('button');
+    initBtn.setAttribute('type', 'button');
+    initBtn.dataset.tooltip = 'Initiative';
+    initBtn.setAttribute('aria-label', 'Initiative');
+    initBtn.innerHTML = '<i class="fa-solid fa-stopwatch"></i>';
+    initBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleInitiativeModal();
+    });
+
+    initLi.appendChild(initBtn);
+    menu.appendChild(initLi);
   } else {
     // Fallback: flat <a> items
     const libraryBtn = document.createElement('a');
@@ -281,7 +299,20 @@ function _injectSidebarLibraryButton() {
     });
 
     tabNav.appendChild(accountBtn);
+
+    const initBtn = document.createElement('a');
+    initBtn.classList.add('item', 'sd20-init-tab');
+    initBtn.dataset.tooltip = 'Initiative';
+    initBtn.innerHTML = '<i class="fa-solid fa-stopwatch"></i>';
+    initBtn.style.cursor = 'pointer';
+    initBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleInitiativeModal();
+    });
+
+    tabNav.appendChild(initBtn);
   }
 
-  debug('Macro Library, Ruling Panel, and Account buttons injected into sidebar');
+  debug('Macro Library, Ruling Panel, Account, and Initiative buttons injected into sidebar');
 }

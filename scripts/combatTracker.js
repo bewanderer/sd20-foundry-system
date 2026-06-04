@@ -5,7 +5,7 @@
 
 import { CONFIG } from './config.js';
 import { log, debug, warn } from './utils.js';
-import { postMaskedChat } from './permissions.js';
+import { postMaskedChat, canSeeActorName } from './permissions.js';
 import {
   getActorCombatSettings, getActorStatusBuildup, getActorActiveConditions,
   applyDamageToActor, commitActorUpdates, isConditionActive,
@@ -13,6 +13,7 @@ import {
 } from './damageSystem.js';
 import { syncTokenStatusIcons } from './tokenStatusIcons.js';
 import { playRapidStatusAnimations, playStatusAnimation } from './animationSystem.js';
+import { showDelayTurnDialog, gmExecuteDelay } from './delayTurnDialog.js';
 
 const { DialogV2 } = foundry.applications.api;
 const MODULE = CONFIG.MODULE_ID;
@@ -57,12 +58,12 @@ export function registerCombatTrackerSettings() {
  * Register combat tracker enhancements
  */
 export function registerCombatTracker() {
-  // Add End Turn button to combat tracker
   Hooks.on('renderCombatTracker', (app, html) => {
-    // v13 passes HTMLElement - normalize
     const el = html instanceof HTMLElement ? html : html[0] ?? html;
     addEndTurnButton(el);
     addGMControls(el);
+    hidePlayerTurnArrows(el);
+    maskNativeTrackerForPlayers(el);
   });
 
   // Auto-roll initiative when combat starts
@@ -71,13 +72,13 @@ export function registerCombatTracker() {
   // Handle turn start for passive regeneration
   Hooks.on('updateCombat', handleTurnChange);
 
-  // Listen for delay turn requests from players (GM executes to preserve edit permissions)
   game.socket.on(`system.${CONFIG.MODULE_ID}`, (data, userId) => {
-    log('Socket message received:', data);
     if (data.type === 'delayTurn' && game.user.isGM) {
-      _gmExecuteDelay(data, userId);
+      gmExecuteDelay(data, userId);
     }
   });
+
+  Hooks.on('updateCombatant', _onCombatantDefeatedHook);
 
   log('Combat tracker enhancements registered');
 }
@@ -128,9 +129,73 @@ function addEndTurnButton(html) {
   controls[controls.length - 1].insertAdjacentElement('afterend', delayTurnBtn);
 }
 
-/**
- * Add GM-only controls
- */
+function hidePlayerTurnArrows(html) {
+  if (game.user.isGM) return;
+  const selectors = [
+    '[data-control="previousTurn"]',
+    '[data-control="nextTurn"]',
+    '[data-control="previousRound"]',
+    '[data-control="nextRound"]',
+    'button.combat-control.fa-arrow-left',
+    'button.combat-control.fa-arrow-right',
+    'button.combat-control.fa-step-backward',
+    'button.combat-control.fa-step-forward',
+    'a.combat-control.fa-arrow-left',
+    'a.combat-control.fa-arrow-right'
+  ];
+  for (const sel of selectors) {
+    html.querySelectorAll(sel).forEach(btn => { btn.style.display = 'none'; });
+  }
+}
+
+function maskNativeTrackerForPlayers(html) {
+  if (game.user.isGM) return;
+  const combat = game.combat;
+  if (!combat) return;
+
+  const UNKNOWN_IMG = 'icons/svg/mystery-man.svg';
+
+  html.querySelectorAll('.combatant').forEach(row => {
+    const combatantId = row.dataset.combatantId;
+    const combatant = combat.combatants.get(combatantId);
+    if (!combatant) return;
+
+    const tokenDoc = combatant.token;
+    const placedToken = tokenDoc ? canvas.tokens?.get(tokenDoc.id) : null;
+    const visibleOnCanvas = placedToken ? placedToken.visible : true;
+    const actor = combatant.actor;
+    const nameRevealed = actor ? canSeeActorName(actor) : true;
+
+    if (visibleOnCanvas && nameRevealed) return;
+
+    const maskedName = visibleOnCanvas ? '???' : '?';
+    const maskImage = !visibleOnCanvas;
+
+    const nameEl = row.querySelector(
+      '.token-name h4, .token-name strong, .token-name span, h4.name, .combatant-name, h4'
+    );
+    if (nameEl) {
+      nameEl.textContent = maskedName;
+      nameEl.removeAttribute('data-tooltip');
+      nameEl.removeAttribute('title');
+    }
+
+    row.removeAttribute('data-tooltip');
+    row.removeAttribute('title');
+    row.setAttribute('aria-label', maskedName);
+
+    if (maskImage) {
+      const imgEl = row.querySelector('img.token-image, img');
+      if (imgEl) {
+        imgEl.src = UNKNOWN_IMG;
+        imgEl.removeAttribute('data-tooltip');
+        imgEl.removeAttribute('title');
+        imgEl.alt = maskedName;
+      }
+    }
+  });
+}
+
 function addGMControls(html) {
   if (!game.user.isGM) return;
 
@@ -570,190 +635,22 @@ async function applyPassiveRegeneration(actor, hpRegen, fpRegen, name) {
   }
 }
 
-/**
- * Show delay turn dialog with valid positions
- * SD20 Rules:
- * - Delay always means "go after" all creatures at that initiative
- * - Can only delay to initiative values that other creatures have
- * - Initiative 0 is always available as "dead last"
- * - Cannot raise initiative back up (no reset between rounds)
- */
-async function showDelayTurnDialog(combatant, combat) {
-  const validPositions = getValidDelayPositions(combatant, combat);
-
-  if (validPositions.length === 0) {
-    ui.notifications.warn('No valid delay positions available');
-    return;
-  }
-
-  // Build options as radio buttons in a form
-  const optionsHtml = validPositions.map((pos, i) => `
-    <label class="delay-option">
-      <input type="radio" name="delayInit" value="${pos.initiative}" ${i === 0 ? 'checked' : ''} />
-      <span class="delay-initiative">${pos.displayInit}</span>
-      <span class="delay-label">${pos.label}</span>
-    </label>
-  `).join('');
-
-  const content = `
-    <div class="sd20-delay-dialog">
-      <p>Delay to initiative (you act last at chosen value):</p>
-      <div class="delay-options">
-        ${optionsHtml}
-      </div>
-    </div>
-  `;
-
-  const result = await DialogV2.confirm({
-    window: { title: 'Delay Turn' },
-    content,
-    yes: {
-      label: 'Confirm Delay',
-      icon: 'fa-solid fa-check',
-      callback: (_event, button) => {
-        const form = button.closest('.dialog-form, .window-content, .application');
-        const checked = form?.querySelector('input[name="delayInit"]:checked');
-        return checked ? parseFloat(checked.value) : null;
-      }
-    },
-    no: {
-      label: 'Cancel',
-      icon: 'fa-solid fa-times'
-    }
-  });
-
-  if (result !== null && result !== undefined && result !== false) {
-    await executeDelayTurn(combatant, combat, result);
-  }
+async function _zeroHpOnMarkDefeated(combatant) {
+  const actor = combatant?.actor;
+  if (!actor) return;
+  const hp = actor.system?.hp;
+  if (!hp) return;
+  const updates = {};
+  if ((hp.value ?? 0) !== 0) updates['system.hp.value'] = 0;
+  if ((hp.temp ?? 0) !== 0) updates['system.hp.temp'] = 0;
+  if (Object.keys(updates).length) await actor.update(updates);
 }
 
-/**
- * Get valid delay positions for a combatant
- * Returns unique initiative values lower than current, plus 0 as "dead last"
- * Player always goes AFTER all creatures at the chosen initiative
- */
-function getValidDelayPositions(delayingCombatant, combat) {
-  const positions = [];
-  const sortedCombatants = combat.turns;
-  const currentInit = delayingCombatant.initiative;
-
-  // Collect unique initiative values lower than current
-  const seenInitiatives = new Set();
-
-  for (const c of sortedCombatants) {
-    if (c.id === delayingCombatant.id) continue;
-    if (c.initiative === null || c.initiative === undefined) continue;
-
-    // Must be lower initiative (can't delay to same or higher)
-    const init = Math.floor(c.initiative);
-    if (init >= currentInit) continue;
-    if (seenInitiatives.has(init)) continue;
-
-    seenInitiatives.add(init);
-
-    // Find all combatants at this initiative for the label
-    const atThisInit = sortedCombatants.filter(
-      x => x.id !== delayingCombatant.id &&
-           Math.floor(x.initiative) === init
-    );
-    const names = atThisInit.map(x => x.name).join(', ');
-
-    positions.push({
-      initiative: init,
-      displayInit: init,
-      label: `After ${names}`
-    });
-  }
-
-  // Always add initiative 0 as "dead last" option (if not already at 0)
-  if (currentInit > 0 && !seenInitiatives.has(0)) {
-    positions.push({
-      initiative: 0,
-      displayInit: 0,
-      label: 'Dead last (initiative 0)'
-    });
-  }
-
-  // Sort by initiative (highest first)
-  positions.sort((a, b) => b.initiative - a.initiative);
-
-  return positions;
-}
-
-/**
- * Execute the delay turn action
- */
-async function executeDelayTurn(combatant, combat, newInitiative) {
-  const displayInit = Math.max(0, Math.ceil(newInitiative));
-
-  // Route through GM via socket so initiative remains GM-editable
-  game.socket.emit(`system.${CONFIG.MODULE_ID}`, {
-    type: 'delayTurn',
-    combatId: combat.id,
-    combatantId: combatant.id,
-    newInitiative
-  });
-
-  debug(`Sent delay request for ${combatant.name} to initiative ${newInitiative}`);
-  ui.notifications.info(`${combatant.name} delayed to initiative ${displayInit}`);
-}
-
-/**
- * GM-side execution of delay turn (called via socket from player)
- */
-async function _gmExecuteDelay(data, requesterId) {
-  const combat = game.combats.get(data.combatId);
-  const combatant = combat?.combatants.get(data.combatantId);
-  if (!combat || !combatant) {
-    log('Delay turn: combat or combatant not found', data);
-    return;
-  }
-
-  // Only the combatant's actor owner (or another GM) can delay its turn.
-  // Without this check, any connected player could craft a payload for any combatant.
-  if (requesterId && requesterId !== game.user.id) {
-    const requester = game.users.get(requesterId);
-    const isRequesterGM = !!requester?.isGM;
-    const requesterOwns = combatant.actor?.testUserPermission(requester, 'OWNER');
-    if (!isRequesterGM && !requesterOwns) {
-      warn(`Rejected delayTurn from user ${requesterId} for combatant ${combatant.name} (not owner)`);
-      return;
-    }
-  }
-
-  const originalInit = combatant.initiative;
-  const existingOriginal = combatant.getFlag(CONFIG.MODULE_ID, 'originalInitiative');
-  if (existingOriginal === undefined) {
-    await combatant.setFlag(CONFIG.MODULE_ID, 'originalInitiative', originalInit);
-  }
-
-  // Remember who should go next (the combatant after the delaying one)
-  const currentTurnIndex = combat.turn;
-  const nextCombatant = combat.turns[currentTurnIndex + 1] || combat.turns[0];
-  const nextCombatantId = nextCombatant?.id;
-
-  // Set delayed flag (used by _sortCombatants to place them last among ties)
-  // and update initiative to the target integer value
-  await combatant.update({
-    initiative: data.newInitiative,
-    [`flags.${CONFIG.MODULE_ID}.delayed`]: true
-  });
-
-  // After initiative change + delayed flag, turn order reshuffles via _sortCombatants.
-  // Set the active turn to whoever was next before the delay.
-  const newTurns = combat.turns;
-  let newTurnIndex = newTurns.findIndex(c => c.id === nextCombatantId);
-  if (newTurnIndex === -1) newTurnIndex = 0;
-  await combat.update({ turn: newTurnIndex });
-
-  const displayInit = data.newInitiative;
-  debug(`GM executed delay: ${combatant.name} from ${originalInit} to ${displayInit}`);
-
-  if (combatant.actor) {
-    postMaskedChat(combatant.actor, (displayName) =>
-      `<strong>${displayName}</strong> delays their turn to initiative ${displayInit}.`
-    );
-  }
+async function _onCombatantDefeatedHook(combatant, change, _options, userId) {
+  if (userId !== game.user.id) return;
+  if (change.defeated !== true) return;
+  if (!game.user.isGM) return;
+  await _zeroHpOnMarkDefeated(combatant);
 }
 
 /* ========================================
