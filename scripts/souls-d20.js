@@ -212,10 +212,10 @@ Hooks.once('init', () => {
   // Register movement pre-hook early (needs to capture position before move)
   registerMovementPreHook();
 
-  // Default new scenes to hex grid (type 4 = hex columns odd)
+  // Default new scenes to square grid (type 1).
   Hooks.on('preCreateScene', (scene, data) => {
     if (data.grid?.type === undefined) {
-      scene.updateSource({ 'grid.type': 4 });
+      scene.updateSource({ 'grid.type': 1 });
     }
   });
 

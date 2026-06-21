@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { log, debug, resolveMaxUses } from './utils.js';
+import { log, debug, resolveMaxUses, renderDiceBreakdown } from './utils.js';
 import { addMacrosToLibraryBatch } from './macroLibrary.js';
 import { resolveTargets } from './targetingSystem.js';
 import { setExecutionContext, clearExecutionContext } from './sd20Api.js';
@@ -482,12 +482,31 @@ export class MacroBar {
     const manager = game.sd20?.macroManager;
     if (!manager) return;
 
+    // Single-flight: callers that arrive while a refresh is in progress get
+    // the same promise. Stops two refreshes overlapping and clobbering each
+    // other's merge or stomping a pending addMacroToSlot save.
+    if (this._refreshInFlight) {
+      debug('refreshMacros already in flight, joining existing promise');
+      return this._refreshInFlight;
+    }
+
     if (this._refreshAbortController) {
       this._refreshAbortController.abort();
     }
     const controller = new AbortController();
     this._refreshAbortController = controller;
     const signal = controller.signal;
+
+    this._refreshInFlight = this._doRefreshMacros(forceReset, forceRefresh, signal);
+    try {
+      return await this._refreshInFlight;
+    } finally {
+      this._refreshInFlight = null;
+    }
+  }
+
+  async _doRefreshMacros(forceReset, forceRefresh, signal) {
+    const manager = game.sd20.macroManager;
 
     const token = canvas.tokens.get(this.tokenId);
     const actor = token?.actor || null;
@@ -657,7 +676,10 @@ export class MacroBar {
           };
         }
 
-        // Preserve user-set fields that the app never provides
+        // User-owned fields that survive every re-link, regardless of modified flag.
+        // Animation, targeting, custom code and rest ability are picked locally
+        // in Foundry and the App never sets them. Combat balance fields update
+        // from the App (handled below by the merged.combat assignment).
         const userFields = {};
         if (currentMacro.targeting) userFields.targeting = currentMacro.targeting;
         if (currentMacro.aoe) userFields.aoe = currentMacro.aoe;
@@ -667,6 +689,7 @@ export class MacroBar {
         if (currentMacro.customScript) userFields.customScript = currentMacro.customScript;
         if (currentMacro.scriptEdited) userFields.scriptEdited = currentMacro.scriptEdited;
         if (currentMacro.restAbility) userFields.restAbility = currentMacro.restAbility;
+        if (currentMacro.animation) userFields.animation = currentMacro.animation;
 
         // Unmodified macro: refresh base data, preserve hotkey + user fields
         // Update appOriginalData with fresh data since macro isn't modified
@@ -802,6 +825,27 @@ export class MacroBar {
 
       // Combine: app macros first, then orphaned modified macros, then custom macros
       activeSetData.macros = [...updatedAppMacros, ...orphanedModifiedMacros, ...customMacros];
+
+      // Bug 2 diagnostic logs: surface what arrived, what stuck, and what got dropped
+      // so a slow / missing / partial-data case can be diagnosed from F12 alone.
+      const byCategory = {};
+      for (const m of activeSetData.macros) {
+        if (!m) continue;
+        const cat = m.macroCategory || 'uncategorized';
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+      debug(`refreshMacros merge complete: total=${activeSetData.macros.length} ` +
+            `(app=${updatedAppMacros.length} orphaned=${orphanedModifiedMacros.length} custom=${customMacros.length}) ` +
+            `by-category=${JSON.stringify(byCategory)}`);
+      const droppedAppMacros = macros.filter(m => {
+        const fresh = updatedAppMacros.find(am => am.id === m.id);
+        return !fresh;
+      });
+      if (droppedAppMacros.length > 0) {
+        debug(`refreshMacros: ${droppedAppMacros.length} incoming App macros were NOT placed: ` +
+              droppedAppMacros.map(m => `${m.name}(${m.id})`).join(', '));
+      }
+
       await this.saveMacroSets();
       if (signal.aborted) return;
 
@@ -3043,21 +3087,26 @@ export class MacroBar {
       // Roll each restoration component
       for (const rest of (combat.restoration || [])) {
         const restType = rest.type;
+        const atTurnStart = !!rest.atTurnStart;
+        const atTurnEnd = !!rest.atTurnEnd;
         if (['heal-hp', 'restore-fp', 'restore-ap', 'reduce-buildup'].includes(restType)) {
           const result = await this._rollCombatComponent(rest, 'restoration', macro);
           result.type = restType;
           result.restorationType = restType;
           result.allowOverMax = rest.allowOverMax || false;
+          result.atTurnStart = atTurnStart;
+          result.atTurnEnd = atTurnEnd;
           if (restType === 'reduce-buildup') result.statusEffect = rest.statusEffect;
           combatResults.restorationRolls.push(result);
           if (result.roll) allRolls.push(result.roll);
         } else {
-          // Cure condition / cure effect - no roll needed
           combatResults.restorationRolls.push({
             type: restType,
             restorationType: restType,
             conditions: rest.conditions || [],
             statusEffects: rest.statusEffects || [],
+            atTurnStart,
+            atTurnEnd,
             total: 0
           });
         }
@@ -3134,11 +3183,29 @@ export class MacroBar {
       combatResults._legacyRollHTML = await roll.render();
     }
 
-    // Simple roll (optional non-damage roll if configured)
-    if (macro.simpleRoll?.diceSides && macro.simpleRoll?.diceCount) {
-      const count = macro.simpleRoll.diceCount;
-      const sides = macro.simpleRoll.diceSides;
-      let bonus = macro.simpleRoll.bonus || 0;
+    // Simple roll (optional non-damage roll if configured). Skipped entirely
+    // when the macro has a combat block with any rolling content. The combat
+    // section provides its own per-component dice display and the simpleRoll
+    // line below would otherwise duplicate or mislabel the result.
+    const hasCombatRollContent = (
+      (macro.combat?.damageTypes?.length > 0) ||
+      (macro.combat?.statusEffects?.length > 0) ||
+      (macro.combat?.statusConditions?.length > 0) ||
+      (macro.combat?.restoration?.length > 0) ||
+      (macro.secondaryCombat?.damageTypes?.length > 0) ||
+      (macro.secondaryCombat?.statusEffects?.length > 0) ||
+      (macro.secondaryCombat?.statusConditions?.length > 0) ||
+      (macro.secondaryCombat?.restoration?.length > 0)
+    );
+    // Bug 13: allow flat-only simpleRoll (count = 0). Fires when at least one of
+    // count > 0 or bonus != 0 is present. Sides is informational at that point.
+    const sr = macro.simpleRoll;
+    const srHasDice = sr?.diceSides && (parseInt(sr.diceCount) || 0) > 0;
+    const srHasBonus = (parseInt(sr?.bonus) || 0) !== 0;
+    if (!hasCombatRollContent && (srHasDice || srHasBonus)) {
+      const count = parseInt(sr.diceCount) || 0;
+      const sides = parseInt(sr.diceSides) || 0;
+      let bonus = parseInt(sr.bonus) || 0;
       // NPC default check macros store the actor-derived modifier on `dcBonus`
       // (e.g. 'stat:dexterity'). Resolve it at roll time so the initiative or
       // skill check actually reflects the actor's current stats.
@@ -3148,10 +3215,18 @@ export class MacroBar {
           bonus = resolved;
         }
       }
-      let formula = `${count}d${sides}`;
+      // 0d0 or 0d20 are valid "flat-only" cases. Build a formula that Foundry
+      // can evaluate cleanly: dice term only if count > 0 and sides > 0.
+      let formula = '';
+      if (count > 0 && sides > 0) formula = `${count}d${sides}`;
       if (bonus !== 0) {
-        formula += bonus > 0 ? ` + ${bonus}` : ` - ${Math.abs(bonus)}`;
+        if (formula) {
+          formula += bonus > 0 ? ` + ${bonus}` : ` - ${Math.abs(bonus)}`;
+        } else {
+          formula = `${bonus}`;
+        }
       }
+      if (!formula) formula = '0';
       const simpleRoll = new Roll(formula);
       await simpleRoll.evaluate();
       allRolls.push(simpleRoll);
@@ -3254,13 +3329,14 @@ export class MacroBar {
         exclusionRadius: macro.aoe?.exclusionRadius || 0
       } : null;
 
+      const aoeOptions = { aoeTemplateId: animationTemplate?.id || null };
       for (const targetToken of resolvedTargets) {
         if (hasHarmful) {
-          game.sd20.threatSystem.createThreatEvent(token, targetToken, macro, combatResults, messageData, executionId, animationContext);
+          game.sd20.threatSystem.createThreatEvent(token, targetToken, macro, combatResults, messageData, executionId, animationContext, aoeOptions);
           createdThreatEvents = true;
         }
         if (hasRestoration) {
-          game.sd20.threatSystem.createRestorationEvent(token, targetToken, macro, combatResults, messageData, executionId, animationContext);
+          game.sd20.threatSystem.createRestorationEvent(token, targetToken, macro, combatResults, messageData, executionId, animationContext, aoeOptions);
           createdThreatEvents = true;
         }
       }
@@ -3575,8 +3651,10 @@ export class MacroBar {
     if (t === 'cone') templateData.angle = macro.aoe.coneAngle || 90;
     if (t === 'ray') templateData.width = macro.aoe.lineWidth || canvas.grid.distance;
 
-    // Hide template from players when visibility is 'hidden'
-    if (playerVisibility === 'hidden') {
+    // Hide template from players when visibility is 'hidden' or 'reactiveReveal'.
+    // For reactiveReveal, the ruling panel surfaces a "Reveal AoE" action that
+    // flips hidden back to false once the GM is ready to show the players.
+    if (playerVisibility === 'hidden' || playerVisibility === 'reactiveReveal') {
       templateData.hidden = true;
     }
 
@@ -3990,47 +4068,7 @@ export class MacroBar {
    * @returns {string} HTML string showing dice breakdown
    */
   _renderDiceBreakdown(roll) {
-    if (!roll || !roll.terms) return '';
-
-    const parts = [];
-    let pendingOp = '+';
-
-    for (const term of roll.terms) {
-      // Handle dice terms (e.g., 2d12)
-      if (term.faces && term.results) {
-        const diceResults = term.results
-          .filter(r => r.active !== false)
-          .map(r => {
-            const value = r.result;
-            const isMax = value === term.faces;
-            const isMin = value === 1;
-            let className = 'dice-result';
-            if (isMax) className += ' dice-max';
-            if (isMin) className += ' dice-min';
-            return `<span class="${className}">${value}</span>`;
-          });
-
-        // Show as: [5, 8] for 2d12 rolling 5 and 8
-        if (diceResults.length > 0) {
-          parts.push(`<span class="dice-group"><span class="dice-label">d${term.faces}</span>[${diceResults.join(', ')}]</span>`);
-        }
-      }
-      // Track pending operator so the next numeric term reflects its actual sign
-      else if (term.operator) {
-        pendingOp = term.operator;
-      }
-      // Handle numeric terms (flat bonuses) honouring the most recent operator
-      else if (term.number !== undefined) {
-        const num = term.number;
-        if (num !== 0) {
-          const sign = pendingOp === '-' ? '-' : (parts.length > 0 ? '+' : '');
-          parts.push(`<span class="dice-bonus">${sign}${Math.abs(num)}</span>`);
-        }
-        pendingOp = '+';
-      }
-    }
-
-    return parts.join(' ');
+    return renderDiceBreakdown(roll);
   }
 
   /**
@@ -4295,11 +4333,19 @@ export class MacroBar {
    * - Linked tokens without App (no characterUUID, actorLink=true): ACTOR
    */
   async saveMacroSets() {
-    // Check read-only mode
     if (this.isReadOnly) {
       debug('Cannot save macros - read-only mode (no actor ownership)');
       return;
     }
+
+    // Snapshot the slot ids at entry. If they change while the actor.update
+    // is in flight (e.g. an addMacroToSlot or refreshMacros wrote in parallel)
+    // we re-run with the current state so the parallel write is not lost.
+    const buildSnapshot = () => {
+      const active = this.macroSets?.[this.activeSet];
+      return (active?.macros || []).map(m => m?.id ?? null).join('|');
+    };
+    const enterSnapshot = buildSnapshot();
 
     const macroData = {
       activeSet: this.activeSet,
@@ -4307,29 +4353,42 @@ export class MacroBar {
       setOrder: this.setOrder
     };
 
-    // Determine storage location: use actor if linked to App OR if token is actor-linked
     const useActorStorage = this.characterUUID || !this.isUnlinked;
 
     if (useActorStorage) {
-      // Save to actor (for App-linked or actor-linked tokens)
       const actor = game.actors.get(this.actorId);
       if (!actor) {
         debug('Cannot save macros - actor not found');
         return;
       }
+      const current = actor.system?.macroSets ?? {};
+      const diff = foundry.utils.diffObject(current, macroData);
+      if (foundry.utils.isEmpty(diff)) {
+        debug('saveMacroSets noop - actor state already matches, skipping write');
+        return;
+      }
       await actor.update({ 'system.macroSets': macroData });
       debug('Saved macroSets to ACTOR');
-      return;
+    } else {
+      const token = canvas.tokens.get(this.tokenId);
+      if (!token) {
+        debug('Cannot save macros - token not found');
+        return;
+      }
+      const tokenCurrent = token.document.getFlag(CONFIG.MODULE_ID, 'macroSets') ?? {};
+      const tokenDiff = foundry.utils.diffObject(tokenCurrent, macroData);
+      if (foundry.utils.isEmpty(tokenDiff)) {
+        debug('saveMacroSets noop - token flag already matches, skipping write');
+        return;
+      }
+      await token.document.setFlag(CONFIG.MODULE_ID, 'macroSets', macroData);
+      debug('Saved macroSets to TOKEN document (unlinked NPC)');
     }
 
-    // For unlinked NPCs (no characterUUID), save to token document
-    const token = canvas.tokens.get(this.tokenId);
-    if (!token) {
-      debug('Cannot save macros - token not found');
-      return;
+    if (buildSnapshot() !== enterSnapshot) {
+      debug('saveMacroSets detected concurrent change, re-saving');
+      return this.saveMacroSets();
     }
-    await token.document.setFlag(CONFIG.MODULE_ID, 'macroSets', macroData);
-    debug('Saved macroSets to TOKEN document (unlinked NPC)');
   }
 
   /**
@@ -4391,14 +4450,20 @@ let activeMacroBar = null;
 export function showMacroBar(token) {
   if (!token) return;
 
-  // Close existing macro bar
+  // controlToken fires false/true on every reselection of the same token.
+  // Rebuilding the bar on each one was the visible source of the per-select
+  // churn the player sees (cached render then background refresh). Same
+  // token id stays put; data changes get picked up by the updateActor hook.
+  if (activeMacroBar?.tokenId === token.id) {
+    activeMacroBar.render();
+    return;
+  }
+
   closeMacroBar();
 
-  // Create new macro bar
   activeMacroBar = new MacroBar(token.id);
   activeMacroBar.initialize().then(() => {
     if (activeMacroBar) {
-      // Render regardless of characterUUID - shows "Link Character" if unlinked
       activeMacroBar.render(true);
     }
   });

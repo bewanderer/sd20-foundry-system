@@ -308,7 +308,7 @@ export class MacroManager {
   constructor() {
     this.macroCache = new Map(); // uuid -> { macros: [], lastUpdate: timestamp }
     this.pendingRequests = new Map(); // uuid -> Promise
-    this.requestTimeout = 2000; // 2 second timeout (reduced for faster UI response)
+    this.requestTimeout = 30000; // 30s. Tight enough to fail fast on App-offline, generous enough for ngrok latency.
   }
 
   /**
@@ -329,6 +329,8 @@ export class MacroManager {
       return this.pendingRequests.get(requestKey);
     }
 
+    const requestId = foundry.utils.randomID(8);
+
     const promise = new Promise((resolve) => {
       const bcm = game.sd20?.broadcastChannel;
       if (!bcm) {
@@ -337,21 +339,21 @@ export class MacroManager {
         return;
       }
 
-      // Listen for response using the bcm.on() method. handler is declared
-      // first so both the timeout and the inline match path can off() this
-      // SPECIFIC handler without clobbering characterSync's persistent one.
+      // Listen for response using bcm.on(). The handler unregisters itself
+      // on first match so a duplicate response from a second App tab does
+      // not double-resolve. characterSync has its own persistent handler.
       const handler = (data) => {
         if (data?.uuid === uuid && (!actorId || data?.actorId === actorId)) {
           clearTimeout(timeoutId);
           bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
           this.pendingRequests.delete(requestKey);
-          debug(`Received combat data for ${uuid}${actorId ? ` (actor: ${actorId})` : ''}`);
+          debug(`Received combat data for ${uuid}${actorId ? ` (actor: ${actorId})` : ''} requestId=${requestId}`);
           resolve(data);
         }
       };
 
       const timeoutId = setTimeout(() => {
-        debug(`Combat data request timed out for ${uuid}`);
+        debug(`Combat data request timed out for ${uuid} requestId=${requestId}`);
         bcm.off(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
         this.pendingRequests.delete(requestKey);
         resolve(null);
@@ -359,10 +361,9 @@ export class MacroManager {
 
       bcm.on(CONFIG.MESSAGE_TYPES.COMBAT_DATA_RESPONSE, handler);
 
-      // Send request with actorId to scope the response
-      bcm.send(CONFIG.MESSAGE_TYPES.COMBAT_DATA_REQUEST, { uuid, actorId });
+      bcm.send(CONFIG.MESSAGE_TYPES.COMBAT_DATA_REQUEST, { uuid, actorId, requestId });
 
-      debug(`Requested combat data for ${uuid}${actorId ? ` (actor: ${actorId})` : ''}`);
+      debug(`Requested combat data for ${uuid}${actorId ? ` (actor: ${actorId})` : ''} requestId=${requestId}`);
     });
 
     this.pendingRequests.set(requestKey, promise);
@@ -461,6 +462,16 @@ export class MacroManager {
   generateMacros(combatData, actor = null) {
     const macros = [];
     const stats = combatData.stats || {};
+
+    // Bug 2 diagnostic: surface what payload the App actually sent so a
+    // "macros missing" symptom can be told apart from "App did not send".
+    debug(`generateMacros: payload summary uuid=${combatData.uuid} ` +
+          `mainHand=${combatData.mainHand ? combatData.mainHand.name || 'yes' : 'null'} ` +
+          `offHand=${combatData.offHand ? combatData.offHand.name || 'yes' : 'null'} ` +
+          `attunedSpells=${combatData.attunedSpells?.length ?? 0} ` +
+          `attunedSpirits=${combatData.attunedSpirits?.length ?? 0} ` +
+          `attunedWeaponSkills=${combatData.attunedWeaponSkills?.length ?? 0} ` +
+          `catalysts=${combatData.catalysts?.length ?? 0}`);
 
     // Generate weapon macros - mainHand is now the weapon data directly
     // CF3: For trick weapons, generate macros for EACH form
@@ -643,6 +654,14 @@ export class MacroManager {
         macroSet: 1
       });
     }
+
+    // Bug 2 diagnostic: per-category count of what we generated for the bar.
+    const categoryCount = {};
+    for (const m of macros) {
+      const cat = m?.macroCategory || 'uncategorized';
+      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+    }
+    debug(`generateMacros: produced ${macros.length} macros, by-category=${JSON.stringify(categoryCount)}`);
 
     return macros;
   }

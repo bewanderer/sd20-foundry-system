@@ -50,8 +50,14 @@ const DEFAULT_COMBAT_SETTINGS = {
       invertHealing: false
     },
     passiveRecovery: {
+      // Legacy names kept so old actors keep working. Treated as turn-start.
       hpPerRound: 0,
-      fpPerRound: 0
+      fpPerRound: 0,
+      // New per-timing fields. Combat tracker prefers these when present.
+      hpPerRoundStart: 0,
+      hpPerRoundEnd: 0,
+      fpPerRoundStart: 0,
+      fpPerRoundEnd: 0
     },
     statusRecovery: {
       selfRecoveryBonus: 0,

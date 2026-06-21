@@ -135,6 +135,9 @@
                 <span class="ruling-comp-value">
                   {{#if durationTurns}}{{durationTurns}} rds{{/if}}{{#if durationAttacks}}{{durationAttacks}} blocked{{/if}}
                 </span>
+              {{else if (eq type 'aoe-reveal')}}
+                <span class="ruling-comp-type ruling-aoe-reveal"><i class="fa-solid fa-eye"></i> Reveal AoE</span>
+                <span class="ruling-comp-value">Approve to show the overlay to all players</span>
               {{/if}}
             </div>
 

@@ -6,9 +6,86 @@
 import { CONFIG } from './config.js';
 import { log, debug, warn, findTokenByUUID, getTokenCharacterUUID } from './utils.js';
 
-/**
- * Register character sync handlers with BroadcastChannel
- */
+const RESPONSE_DEDUPE_WINDOW_MS = 500;
+const RECONNECT_RESYNC_WINDOW_MS = 30000;
+const CHARACTER_UPDATE_DEBOUNCE_MS = 100;
+
+const _recentResponses = new Map();
+const _reconnectSnapshots = new Map();
+const _pendingUpdates = new Map();
+// Actors that just transitioned from no-character to linked-character. Set in
+// the updateActor hook below and consumed once by updateActorFromCharacterData.
+// This is the canonical signal for "treat current = max" because it does not
+// depend on a persistent flag that might have failed to write earlier.
+const _firstLinkPending = new Set();
+
+function _stableHash(obj) {
+  try {
+    return JSON.stringify(obj, Object.keys(obj || {}).sort());
+  } catch {
+    return null;
+  }
+}
+
+function _shouldSkipDuplicateResponse(uuid) {
+  const now = Date.now();
+  const last = _recentResponses.get(uuid);
+  if (last && (now - last) < RESPONSE_DEDUPE_WINDOW_MS) {
+    return true;
+  }
+  _recentResponses.set(uuid, now);
+  if (_recentResponses.size > 64) {
+    for (const [key, ts] of _recentResponses) {
+      if ((now - ts) > RESPONSE_DEDUPE_WINDOW_MS * 4) _recentResponses.delete(key);
+    }
+  }
+  return false;
+}
+
+function _shouldSkipReconnectResync(uuid, charData) {
+  const hash = _stableHash({
+    name: charData.name, level: charData.level, maxHP: charData.maxHP,
+    maxFP: charData.maxFP, maxAP: charData.maxAP, stats: charData.stats,
+    statMods: charData.statMods, skills: charData.skills, knowledge: charData.knowledge,
+    equipment: charData.equipment, attuned_spells: charData.attuned_spells,
+    attuned_spirits: charData.attuned_spirits, attuned_weapon_skills: charData.attuned_weapon_skills,
+    bonus_resistances: charData.bonus_resistances, bonus_statuses: charData.bonus_statuses
+  });
+  if (!hash) return false;
+  const now = Date.now();
+  const prev = _reconnectSnapshots.get(uuid);
+  if (prev && prev.hash === hash && (now - prev.ts) < RECONNECT_RESYNC_WINDOW_MS) {
+    return true;
+  }
+  _reconnectSnapshots.set(uuid, { hash, ts: now });
+  return false;
+}
+
+function _isPositiveInt(value) {
+  return Number.isFinite(value) && value > 0 && Math.floor(value) === value;
+}
+
+function _validateCharacterData(charData) {
+  if (!charData || typeof charData !== 'object') return false;
+  if (charData.maxHP !== undefined && !_isPositiveInt(charData.maxHP)) {
+    warn(`Rejecting App data: maxHP not a positive integer (got ${charData.maxHP})`);
+    return false;
+  }
+  if (charData.maxFP !== undefined && !_isPositiveInt(charData.maxFP)) {
+    warn(`Rejecting App data: maxFP not a positive integer (got ${charData.maxFP})`);
+    return false;
+  }
+  if (charData.maxAP !== undefined && !_isPositiveInt(charData.maxAP)) {
+    warn(`Rejecting App data: maxAP not a positive integer (got ${charData.maxAP})`);
+    return false;
+  }
+  if (charData.level !== undefined && !(Number.isFinite(charData.level) && charData.level >= 0)) {
+    warn(`Rejecting App data: level invalid (got ${charData.level})`);
+    return false;
+  }
+  return true;
+}
+
 export function registerCharacterSyncHandlers() {
   const bcm = game.sd20.broadcastChannel;
 
@@ -53,6 +130,9 @@ export function registerCharacterSyncHandlers() {
     // If UUID was set (not cleared) and it's different from before
     if (newUUID && newUUID !== oldUUID) {
       log(`New character link detected on "${actor.name}": ${newUUID}`);
+      // Mark this actor so the next App response treats current = max.
+      // Consumed by updateActorFromCharacterData, see below.
+      _firstLinkPending.add(actor.id);
       requestImmediateCharacterData(newUUID, actor.id);
     }
 
@@ -76,10 +156,19 @@ export function registerCharacterSyncHandlers() {
 //
 // Tokens flagged as orphaned (from a prior soft-unlink) are skipped so they
 // keep the snapshot the user wanted to preserve.
-async function _syncTokensFromActor(actor) {
+async function _syncTokensFromActor(actor, { isFirstLink = false } = {}) {
   if (!actor?.id || !game.scenes) return;
 
-  const SYSTEM_KEYS = ['hp', 'fp', 'ap', 'level', 'stats', 'equippedWeapons'];
+  // Resources (hp/fp/ap) are split: max is mirrored from actor to token via
+  // dot notation so we never clobber the token's current values. Other system
+  // keys (stats, level, equipment) are fully mirrored because they don't
+  // carry gameplay state. Foundry's damage system owns current resources;
+  // the App is forbidden from changing them, per the user's locked rule.
+  //
+  // On initial link only, we also mirror current = max for unlinked tokens
+  // so the freshly linked character starts at full resources.
+  const RESOURCE_KEYS = ['hp', 'fp', 'ap'];
+  const STATIC_KEYS = ['level', 'stats', 'equippedWeapons'];
   const FLAG_KEYS = [
     'characterData', 'characterUUID', 'skills', 'knowledge', 'equipment',
     'attuned_spells', 'attuned_spirits', 'attuned_weapon_skills',
@@ -87,7 +176,16 @@ async function _syncTokensFromActor(actor) {
   ];
 
   const systemSnapshot = {};
-  for (const key of SYSTEM_KEYS) {
+  for (const key of RESOURCE_KEYS) {
+    const maxValue = actor.system?.[key]?.max;
+    if (maxValue !== undefined) {
+      systemSnapshot[`delta.system.${key}.max`] = maxValue;
+      if (isFirstLink) {
+        systemSnapshot[`delta.system.${key}.value`] = maxValue;
+      }
+    }
+  }
+  for (const key of STATIC_KEYS) {
     const value = actor.system?.[key];
     if (value !== undefined) {
       systemSnapshot[`delta.system.${key}`] = foundry.utils.deepClone(value);
@@ -107,9 +205,22 @@ async function _syncTokensFromActor(actor) {
     for (const tokenDoc of scene.tokens) {
       if (tokenDoc.actorId !== actor.id) continue;
       if (tokenDoc.getFlag(CONFIG.MODULE_ID, 'orphaned')) continue;
-      const update = { _id: tokenDoc.id, ...flagsSnapshot };
-      if (!tokenDoc.actorLink) Object.assign(update, systemSnapshot);
-      updates.push(update);
+
+      const proposed = { ...flagsSnapshot };
+      if (!tokenDoc.actorLink) Object.assign(proposed, systemSnapshot);
+
+      // Only write fields that actually differ. Tokens get mirrored on
+      // every actor.update which is loud for actors with many tokens; this
+      // turns it into a no-op for the common case where nothing changed.
+      const diff = {};
+      for (const [key, value] of Object.entries(proposed)) {
+        const current = foundry.utils.getProperty(tokenDoc, key);
+        if (!foundry.utils.objectsEqual(current ?? null, value ?? null)) {
+          diff[key] = value;
+        }
+      }
+      if (Object.keys(diff).length === 0) continue;
+      updates.push({ _id: tokenDoc.id, ...diff });
     }
     if (updates.length === 0) continue;
     try {
@@ -307,10 +418,6 @@ function requestImmediateCharacterData(uuid, actorId) {
   });
 }
 
-/**
- * Handle linked character response from App
- * Updates all actors linked to the received characters
- */
 function handleLinkedCharacterResponse(data) {
   if (!data.characters || !Array.isArray(data.characters)) {
     debug('Invalid linked character response');
@@ -319,12 +426,17 @@ function handleLinkedCharacterResponse(data) {
 
   log(`Received data for ${data.characters.length} linked characters`);
 
-  // Store and sync each character
   for (const charData of data.characters) {
-    // Store in module namespace
-    game.sd20.characters[charData.uuid] = charData;
+    if (!_validateCharacterData(charData)) continue;
 
-    // Update all actors linked to this character
+    if (_shouldSkipReconnectResync(charData.uuid, charData)) {
+      debug(`Skipping bulk re-sync for ${charData.uuid} (identical snapshot within ${RECONNECT_RESYNC_WINDOW_MS}ms)`);
+      // Still keep the cache fresh, just do not rewrite the actor.
+      game.sd20.characters[charData.uuid] = charData;
+      continue;
+    }
+
+    game.sd20.characters[charData.uuid] = charData;
     updateActorsFromCharacterData(charData);
   }
 }
@@ -338,28 +450,29 @@ async function handleCombatDataResponse(data) {
     return;
   }
 
-  const { uuid, actorId, ...characterData } = data;
+  const dedupeKey = data.actorId ? `${data.uuid}:${data.actorId}` : data.uuid;
+  if (_shouldSkipDuplicateResponse(dedupeKey)) {
+    debug(`Duplicate combat:response-data for ${dedupeKey} within ${RESPONSE_DEDUPE_WINDOW_MS}ms, skipping`);
+    return;
+  }
 
-  // Store character data
+  if (!_validateCharacterData(data)) return;
+
+  const { uuid, actorId, requestId, ...characterData } = data;
+  if (requestId) debug(`combat:response-data trace requestId=${requestId} uuid=${uuid}`);
+
   game.sd20.characters[uuid] = { uuid, ...characterData };
 
-  // If actorId was provided, update that specific actor
   if (actorId) {
     const actor = game.actors.get(actorId);
     if (actor && actor.system?.characterUUID === uuid) {
+      // Capture before updateActorFromCharacterData consumes the marker.
+      const wasFirstLink = _firstLinkPending.has(actor.id);
       await updateActorFromCharacterData(actor, { uuid, ...characterData });
-      await _syncTokensFromActor(actor);
+      await _syncTokensFromActor(actor, { isFirstLink: wasFirstLink });
       ui.notifications.info(`Character data synced for ${actor.name}`);
-
-      // Trigger macro bar refresh if this actor's token is selected
-      const macroBar = game.sd20?.getActiveMacroBar?.();
-      if (macroBar && macroBar.actor?.id === actorId) {
-        await macroBar.refreshMacros?.();
-        macroBar.render?.();
-      }
     }
   } else {
-    // No specific actor, update all actors with this UUID
     await updateActorsFromCharacterData({ uuid, ...characterData });
   }
 }
@@ -376,8 +489,9 @@ async function updateActorsFromCharacterData(charData) {
   }
 
   for (const actor of linkedActors) {
+    const wasFirstLink = _firstLinkPending.has(actor.id);
     await updateActorFromCharacterData(actor, charData);
-    await _syncTokensFromActor(actor);
+    await _syncTokensFromActor(actor, { isFirstLink: wasFirstLink });
   }
 }
 
@@ -387,12 +501,22 @@ async function updateActorsFromCharacterData(charData) {
 async function updateActorFromCharacterData(actor, charData) {
   if (!actor || !charData) return;
 
+  // First-link detection: keyed off the characterUUID transition latched by
+  // the updateActor hook in registerCharacterSyncHandlers. This does not rely
+  // on a persistent flag (which can fail to write on permission edge cases
+  // and would cause every subsequent App refresh to be treated as a new link).
+  // Once consumed here, the marker is removed so resyncs do not overwrite
+  // current HP/FP/AP again.
+  const isFirstLink = _firstLinkPending.has(actor.id);
+  if (isFirstLink) {
+    _firstLinkPending.delete(actor.id);
+    debug(`First-link detected for ${actor.name}, will set current = max`);
+  }
+
   const actorUpdates = {};
 
-  // Store the full character data for macro generation
   actorUpdates[`flags.${CONFIG.MODULE_ID}.characterData`] = charData;
 
-  // Update basic info
   if (charData.name && charData.name !== actor.name) {
     actorUpdates['name'] = charData.name;
     actorUpdates['prototypeToken.name'] = charData.name;
@@ -401,19 +525,21 @@ async function updateActorFromCharacterData(actor, charData) {
     actorUpdates['system.level'] = charData.level;
   }
 
-  // Update stats
   if (charData.stats) {
     actorUpdates['system.stats'] = charData.stats;
   }
 
   if (charData.maxHP !== undefined) {
     actorUpdates['system.hp.max'] = charData.maxHP;
+    if (isFirstLink) actorUpdates['system.hp.value'] = charData.maxHP;
   }
   if (charData.maxFP !== undefined) {
     actorUpdates['system.fp.max'] = charData.maxFP;
+    if (isFirstLink) actorUpdates['system.fp.value'] = charData.maxFP;
   }
   if (charData.maxAP !== undefined) {
     actorUpdates['system.ap.max'] = charData.maxAP;
+    if (isFirstLink) actorUpdates['system.ap.value'] = charData.maxAP;
   }
 
   // Update skills and knowledge
@@ -489,10 +615,6 @@ function handleCharacterListResponse(data) {
   syncAllLinkedTokens(data.characters);
 }
 
-/**
- * Handle individual character update from App
- * Updates stored data and syncs to linked token
- */
 function handleCharacterUpdate(data) {
   if (!data?.uuid) {
     warn('Invalid character update data:', data);
@@ -500,14 +622,30 @@ function handleCharacterUpdate(data) {
   }
 
   const uuid = data.uuid;
-  debug(`Character update received for ${uuid}`);
 
-  // Update stored character data
+  const existingTimer = _pendingUpdates.get(uuid);
+  if (existingTimer) {
+    clearTimeout(existingTimer.timerId);
+    _pendingUpdates.delete(uuid);
+  }
+
+  const timerId = setTimeout(() => {
+    _pendingUpdates.delete(uuid);
+    _processCharacterUpdate(uuid, data);
+  }, CHARACTER_UPDATE_DEBOUNCE_MS);
+
+  _pendingUpdates.set(uuid, { timerId, data });
+}
+
+function _processCharacterUpdate(uuid, data) {
+  debug(`Character update processed for ${uuid}`);
+
+  if (!_validateCharacterData(data)) return;
+
   if (game.sd20.characters[uuid]) {
     Object.assign(game.sd20.characters[uuid], data);
   }
 
-  // Find and update linked token
   const token = findTokenByUUID(uuid);
   if (!token) {
     debug(`No token linked to character ${uuid}`);
@@ -547,19 +685,17 @@ async function updateTokenFromCharacter(token, changes) {
   if (actor) {
     const actorUpdates = {};
 
-    if (changes.currentHP !== undefined || changes.maxHP !== undefined) {
-      if (changes.currentHP !== undefined) actorUpdates['system.hp.value'] = changes.currentHP;
-      if (changes.maxHP !== undefined) actorUpdates['system.hp.max'] = changes.maxHP;
+    // App pushes only touch max values. Current HP/FP/AP are owned by
+    // Foundry's damage system once the character is linked. App-side flask
+    // drinks etc. used to flow back here and reset combat state mid-fight.
+    if (changes.maxHP !== undefined && _isPositiveInt(changes.maxHP)) {
+      actorUpdates['system.hp.max'] = changes.maxHP;
     }
-
-    if (changes.currentFP !== undefined || changes.maxFP !== undefined) {
-      if (changes.currentFP !== undefined) actorUpdates['system.fp.value'] = changes.currentFP;
-      if (changes.maxFP !== undefined) actorUpdates['system.fp.max'] = changes.maxFP;
+    if (changes.maxFP !== undefined && _isPositiveInt(changes.maxFP)) {
+      actorUpdates['system.fp.max'] = changes.maxFP;
     }
-
-    if (changes.currentAP !== undefined || changes.maxAP !== undefined) {
-      if (changes.currentAP !== undefined) actorUpdates['system.ap.value'] = changes.currentAP;
-      if (changes.maxAP !== undefined) actorUpdates['system.ap.max'] = changes.maxAP;
+    if (changes.maxAP !== undefined && _isPositiveInt(changes.maxAP)) {
+      actorUpdates['system.ap.max'] = changes.maxAP;
     }
 
     // Store equipped weapon scaling data for runtime macro resolution

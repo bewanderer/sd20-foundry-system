@@ -151,10 +151,11 @@
         <div class="form-group">
           <label>Simple Roll</label>
           <div class="simple-dice-row">
-            <input type="number" name="simpleRoll.diceCount" {{#if simpleRoll.diceCount}}value="{{simpleRoll.diceCount}}"{{/if}} placeholder="#" min="1" class="input-sm" title="Number of dice" />
+            <input type="number" name="simpleRoll.diceCount" {{#if simpleRoll.diceCount}}value="{{simpleRoll.diceCount}}"{{/if}} placeholder="#" min="0" class="input-sm" title="Number of dice" />
             <span>d</span>
             <select name="simpleRoll.diceSides" class="select-sm" title="Die size">
               <option value="" {{#unless simpleRoll.diceSides}}selected{{/unless}}>--</option>
+              <option value="0" {{#if (eq simpleRoll.diceSides 0)}}selected{{/if}}>0</option>
               <option value="2" {{#if (eq simpleRoll.diceSides 2)}}selected{{/if}}>2</option>
               <option value="4" {{#if (eq simpleRoll.diceSides 4)}}selected{{/if}}>4</option>
               <option value="6" {{#if (eq simpleRoll.diceSides 6)}}selected{{/if}}>6</option>
@@ -306,9 +307,10 @@
                     <option value="AP" {{#if (eq type "AP")}}selected{{/if}}>AP Drain</option>
                   </select>
                   <span class="field-label">Dice:</span>
-                  <input type="number" name="combat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="1" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <input type="number" name="combat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
                   <span class="dice-d">d</span>
                   <select name="combat.damageTypes[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -447,6 +449,7 @@
                   <input type="number" name="combat.statusEffects[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
                   <span class="dice-d">d</span>
                   <select name="combat.statusEffects[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -706,6 +709,7 @@
                   <input type="number" name="combat.restoration[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="Dice" class="input-sm" title="Number of dice" />
                   <span>d</span>
                   <select name="combat.restoration[{{@index}}].diceSides" class="select-sm" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -787,6 +791,16 @@
                 <label class="checkbox-inline restoration-overmax" style="{{#if (or (eq type "reduce-buildup") (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}" title="Allow healing/restoring past maximum">
                   <input type="checkbox" name="combat.restoration[{{@index}}].allowOverMax" {{#if allowOverMax}}checked{{/if}} />
                   <span>Over Max</span>
+                </label>
+
+                <label class="checkbox-inline restoration-timing" title="Defer until the target's next turn starts. If neither timing is checked the restoration applies immediately when the macro fires.">
+                  <input type="checkbox" name="combat.restoration[{{@index}}].atTurnStart" {{#if atTurnStart}}checked{{/if}} />
+                  <span>At Turn Start</span>
+                </label>
+
+                <label class="checkbox-inline restoration-timing" title="Defer until the target's current turn ends. If neither timing is checked the restoration applies immediately when the macro fires.">
+                  <input type="checkbox" name="combat.restoration[{{@index}}].atTurnEnd" {{#if atTurnEnd}}checked{{/if}} />
+                  <span>At Turn End</span>
                 </label>
 
                 <!-- Status effect dropdown for reduce-buildup -->
@@ -1027,9 +1041,10 @@
                     <option value="AP" {{#if (eq type "AP")}}selected{{/if}}>AP Drain</option>
                   </select>
                   <span class="field-label">Dice:</span>
-                  <input type="number" name="secondaryCombat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="1" placeholder="#" class="input-dice-count" title="Number of dice" />
+                  <input type="number" name="secondaryCombat.damageTypes[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
                   <span class="dice-d">d</span>
                   <select name="secondaryCombat.damageTypes[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -1123,6 +1138,7 @@
                   <input type="number" name="secondaryCombat.statusEffects[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="#" class="input-dice-count" title="Number of dice" />
                   <span class="dice-d">d</span>
                   <select name="secondaryCombat.statusEffects[{{@index}}].diceSides" class="select-dice-sides" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -1336,6 +1352,7 @@
                   <input type="number" name="secondaryCombat.restoration[{{@index}}].diceCount" value="{{diceCount}}" min="0" placeholder="Dice" class="input-sm" title="Number of dice" />
                   <span>d</span>
                   <select name="secondaryCombat.restoration[{{@index}}].diceSides" class="select-sm" title="Die size">
+                    <option value="0" {{#if (eq diceSides 0)}}selected{{/if}}>0</option>
                     <option value="2" {{#if (eq diceSides 2)}}selected{{/if}}>2</option>
                     <option value="4" {{#if (eq diceSides 4)}}selected{{/if}}>4</option>
                     <option value="6" {{#if (eq diceSides 6)}}selected{{/if}}>6</option>
@@ -1370,6 +1387,16 @@
                 <label class="checkbox-inline restoration-overmax" style="{{#if (or (eq type "reduce-buildup") (eq type "cure-condition") (eq type "cure-effect"))}}display:none{{/if}}" title="Allow healing/restoring past maximum">
                   <input type="checkbox" name="secondaryCombat.restoration[{{@index}}].allowOverMax" {{#if allowOverMax}}checked{{/if}} />
                   <span>Over Max</span>
+                </label>
+
+                <label class="checkbox-inline restoration-timing" title="Defer until the target's next turn starts. If neither timing is checked the restoration applies immediately when the macro fires.">
+                  <input type="checkbox" name="secondaryCombat.restoration[{{@index}}].atTurnStart" {{#if atTurnStart}}checked{{/if}} />
+                  <span>At Turn Start</span>
+                </label>
+
+                <label class="checkbox-inline restoration-timing" title="Defer until the target's current turn ends. If neither timing is checked the restoration applies immediately when the macro fires.">
+                  <input type="checkbox" name="secondaryCombat.restoration[{{@index}}].atTurnEnd" {{#if atTurnEnd}}checked{{/if}} />
+                  <span>At Turn End</span>
                 </label>
 
                 <select name="secondaryCombat.restoration[{{@index}}].statusEffect" class="restoration-buildup-target" style="{{#unless (eq type "reduce-buildup")}}display:none{{/unless}}">
@@ -1852,8 +1879,9 @@
               <option value="hidden" {{#if (eq aoe.playerVisibility 'hidden')}}selected{{/if}}>Hidden from players</option>
               <option value="visible" {{#if (eq aoe.playerVisibility 'visible')}}selected{{/if}}>Visible to players</option>
               <option value="afterCast" {{#if (eq aoe.playerVisibility 'afterCast')}}selected{{/if}}>Show after cast</option>
+              <option value="reactiveReveal" {{#if (eq aoe.playerVisibility 'reactiveReveal')}}selected{{/if}}>Reactive Reveal (GM approves on ruling panel)</option>
             </select>
-            <p class="hint">Controls whether players can see the AoE overlay on the grid. Players are still threatened by hidden AoEs.</p>
+            <p class="hint">Controls whether players can see the AoE overlay on the grid. Players are still threatened by hidden AoEs. Reactive Reveal keeps the overlay hidden until the GM clicks "Reveal AoE" on the ruling panel after targets react.</p>
           </div>
           {{/if}}
         </div>

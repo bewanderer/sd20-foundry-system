@@ -5,7 +5,7 @@
  * Supports drag-to-move, low idle opacity, and persistence across page refresh
  */
 
-import { log, debug } from './utils.js';
+import { log, debug, renderDiceBreakdown } from './utils.js';
 import { isTokenInHighlightedCells } from './aoeGridHighlight.js';
 
 /** Map of templateId -> DOM container element */
@@ -606,9 +606,10 @@ function _buildRepeatChatHTML(macro, combatResults) {
     html += `<div class="combat-section harmful">`;
     for (const dmg of combatResults.damageRolls) {
       const color = CONFIG.DAMAGE_TYPE_COLORS?.[dmg.type] || '#c0c0c0';
+      const breakdown = dmg.roll ? renderDiceBreakdown(dmg.roll) : (dmg.formula || '0');
       html += `<div class="combat-component damage-row">`;
       html += `<span class="damage-type-label" style="color:${color}">${dmg.type || 'Physical'}</span>`;
-      html += `<span class="damage-formula">${dmg.formula || '0'}</span>`;
+      html += `<span class="damage-dice-breakdown">${breakdown}</span>`;
       html += `<span class="damage-total">= ${dmg.total}</span>`;
       html += `</div>`;
     }
@@ -621,9 +622,10 @@ function _buildRepeatChatHTML(macro, combatResults) {
   if (hasBuildup || hasConditions) {
     html += `<div class="combat-section harmful">`;
     for (const eff of (combatResults.buildupRolls || [])) {
+      const breakdown = eff.roll ? renderDiceBreakdown(eff.roll) : (eff.formula || '0');
       html += `<div class="combat-component buildup-row">`;
       html += `<span class="buildup-label">${eff.name || 'Buildup'}</span>`;
-      html += `<span class="buildup-formula">${eff.formula || '0'}</span>`;
+      html += `<span class="buildup-dice-breakdown">${breakdown}</span>`;
       html += `<span class="buildup-total">= ${eff.total}</span>`;
       html += `</div>`;
     }
@@ -651,7 +653,8 @@ function _buildRepeatChatHTML(macro, combatResults) {
       };
       html += `<span class="restoration-label">${typeLabels[rest.type] || rest.type}</span>`;
       if (rest.formula) {
-        html += `<span class="restoration-formula">${rest.formula}</span>`;
+        const breakdown = rest.roll ? renderDiceBreakdown(rest.roll) : rest.formula;
+        html += `<span class="restoration-dice-breakdown">${breakdown}</span>`;
         html += `<span class="restoration-total">= ${rest.total}</span>`;
       }
       if (rest.allowOverMax) html += `<span class="restoration-overmax">Over Max</span>`;

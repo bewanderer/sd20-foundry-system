@@ -255,3 +255,59 @@ export function sanitizeInput(input) {
   div.textContent = input;
   return div.innerHTML;
 }
+
+// Render a Roll's individual dice values for the chat card. Shared by
+// macroBar.js and aoeRepeatUI.js so both chat surfaces always show the
+// per-die outcome (player must always be able to see what each die rolled).
+//
+// Format: 2d6 rolling 3 and 5 displays as `d6[3, 5]`. 2d6 + 1d4 + 2 displays
+// as `d6[3, 5] d4[4] +2`. Flat-only rolls display only the bonus.
+//
+// One level of nested terms is flattened so that compound Foundry roll
+// constructions (e.g. PooledTerm) still surface their inner dice.
+export function renderDiceBreakdown(roll) {
+  if (!roll || !roll.terms) return '';
+
+  const flatTerms = [];
+  for (const t of roll.terms) {
+    if (Array.isArray(t?.terms) && !t.faces) {
+      for (const sub of t.terms) flatTerms.push(sub);
+    } else {
+      flatTerms.push(t);
+    }
+  }
+
+  const parts = [];
+  let pendingOp = '+';
+
+  for (const term of flatTerms) {
+    if (term.faces && term.results) {
+      const diceResults = term.results
+        .filter(r => r.active !== false)
+        .map(r => {
+          const value = r.result;
+          const isMax = value === term.faces;
+          const isMin = value === 1;
+          let className = 'dice-result';
+          if (isMax) className += ' dice-max';
+          if (isMin) className += ' dice-min';
+          return `<span class="${className}">${value}</span>`;
+        });
+
+      if (diceResults.length > 0) {
+        parts.push(`<span class="dice-group"><span class="dice-label">d${term.faces}</span>[${diceResults.join(', ')}]</span>`);
+      }
+    } else if (term.operator) {
+      pendingOp = term.operator;
+    } else if (term.number !== undefined) {
+      const num = term.number;
+      if (num !== 0) {
+        const sign = pendingOp === '-' ? '-' : (parts.length > 0 ? '+' : '');
+        parts.push(`<span class="dice-bonus">${sign}${Math.abs(num)}</span>`);
+      }
+      pendingOp = '+';
+    }
+  }
+
+  return parts.join(' ');
+}

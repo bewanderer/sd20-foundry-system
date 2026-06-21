@@ -496,7 +496,19 @@ function _drawBars(token) {
     barIndex++;
   }
 
-  // Add container to token
-  token.addChild(container);
+  // Bars used to be children of the token, which meant the upper token's
+  // bars rendered on top of any overlapping lower token because PIXI renders
+  // each parent's whole subtree together. Re-parent to the token layer and
+  // position absolutely. Set sortableChildren on the parent and give the bar
+  // a very low zIndex so token sprites always paint on top.
+  const parentLayer = canvas.tokens;
+  if (parentLayer) {
+    parentLayer.sortableChildren = true;
+    container.zIndex = -1000;
+    container.position.set(token.position.x, token.position.y);
+    parentLayer.addChild(container);
+  } else {
+    token.addChild(container);
+  }
   _barContainers.set(token.id, container);
 }

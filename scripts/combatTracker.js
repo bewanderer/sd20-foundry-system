@@ -8,7 +8,7 @@ import { log, debug, warn } from './utils.js';
 import { postMaskedChat, canSeeActorName } from './permissions.js';
 import {
   getActorCombatSettings, getActorStatusBuildup, getActorActiveConditions,
-  applyDamageToActor, commitActorUpdates, isConditionActive,
+  applyDamageToActor, applyRestorationToActor, commitActorUpdates, isConditionActive,
   tickVulnerabilityDurations
 } from './damageSystem.js';
 import { syncTokenStatusIcons } from './tokenStatusIcons.js';
@@ -279,9 +279,20 @@ async function handleCombatantAction(action, combatant, combat) {
       await combatant.update({ initiative: Math.max(0, initValue - 1) });
       break;
 
-    case 'remove':
+    case 'remove': {
+      const wasActive = combat.combatant?.id === combatant.id;
       await combatant.delete();
+      if (wasActive) {
+        // Foundry removes the combatant but does not fire updateCombat with a
+        // turn change, so handleTurnChange never runs for the new active.
+        // Trigger it manually so AP restore + regen + status automation runs.
+        const newActive = combat.combatant;
+        if (newActive) {
+          await handleTurnChange(combat, { turn: combat.turn }, {}, game.user.id);
+        }
+      }
       break;
+    }
   }
 }
 
@@ -330,105 +341,171 @@ async function handleCombatStart(combat) {
 }
 
 /**
- * Handle turn change - trigger passive regeneration at turn start
+ * Handle turn change. GM-only, forward-only.
+ *
+ * The "ending combatant" (whose turn just finished) and the "starting combatant"
+ * (whose turn just started) are treated independently. Each one reads its own
+ * actor's passive recovery settings and applies HP/FP regen for their timing
+ * (turn start vs turn end). Either or both timings can be configured per actor.
+ *
+ * Backward turn movement (GM clicks Previous Turn) does NOT trigger regen or
+ * AP restore. Going back is a rewind, not a new turn.
+ *
+ * Bug-fix history baked in:
+ *   Bug 10: previously both the OWNER and GM clients ran this and raced on
+ *           actor.update, occasionally producing +2 regen instead of +1.
+ *           Now GM-only, single source of truth.
+ *   Bug 11: previously fired on backward as well. Now forward-only via the
+ *           combat.previous comparison below.
+ *   Bug 8:  the new-active path is invoked from handleCombatantAction.remove
+ *           when the active combatant is removed, so the replacement gets
+ *           turn-start treatment for free.
  */
 async function handleTurnChange(combat, changed, _options, _userId) {
-  // Only process on turn change
   if (!('turn' in changed) && !('round' in changed)) return;
   if (!combat?.started) return;
+  if (!game.user.isGM) return;
 
-  const combatant = combat.combatant;
-  if (!combatant) return;
+  if (!_isForwardTurnChange(combat, changed)) {
+    debug('Turn change is backward, skipping turn-start/end automation');
+    return;
+  }
 
-  // Only process for tokens the current user controls
-  if (!combatant.isOwner && !game.user.isGM) return;
+  const startingCombatant = combat.combatant;
+  const endingCombatant = combat.previous?.combatantId
+    ? combat.combatants.get(combat.previous.combatantId)
+    : null;
 
-  const token = combatant.token;
-  if (!token) return;
+  // End-of-turn recovery + drain end-timed deferred restorations from macros.
+  if (endingCombatant?.actor && endingCombatant.id !== startingCombatant?.id) {
+    await _drainPendingRestorations(endingCombatant, 'end');
+    await _applyPassiveRecoveryForTiming(endingCombatant, 'end');
+  }
 
-  // Reset AP to max at turn start, but preserve bonus AP (over max from abilities)
-  // Only restore if current AP is BELOW max - don't reduce if above max
+  if (startingCombatant?.actor) {
+    await _restoreAPAtTurnStart(startingCombatant);
+    await _drainPendingRestorations(startingCombatant, 'start');
+    await _applyPassiveRecoveryForTiming(startingCombatant, 'start');
+
+    // Status effect / condition automation continues to run for the starting
+    // combatant only. It already assumes turn-start semantics.
+    const token = startingCombatant.token;
+    if (token) {
+      await _processTurnStartAutomation(startingCombatant.actor, token, startingCombatant.name, combat.round);
+    }
+  }
+
+  // AOE template lifecycle. handleTurnChange is already GM-only at the top.
+  if (endingCombatant) {
+    await handleTemplateEndOfTurn(endingCombatant);
+    if (endingCombatant.actor) {
+      await handleVulnerabilityDuration(endingCombatant.actor, combat.round);
+    }
+  }
+  if (startingCombatant) {
+    await handleTemplateDuration(startingCombatant);
+  }
+}
+
+// Returns true if the active turn moved forward in initiative order, false if
+// it moved backward. Uses combat.previous which Foundry sets to the pointer
+// state BEFORE the current update.
+function _isForwardTurnChange(combat, changed) {
+  const prev = combat.previous;
+  if (!prev) return true;
+
+  const newRound = ('round' in changed) ? changed.round : combat.round;
+  const newTurn = ('turn' in changed) ? changed.turn : combat.turn;
+  const oldRound = prev.round;
+  const oldTurn = prev.turn;
+
+  if (typeof oldRound !== 'number' || typeof oldTurn !== 'number') return true;
+
+  if (newRound > oldRound) return true;
+  if (newRound < oldRound) return false;
+  // Same round
+  return newTurn >= oldTurn;
+}
+
+async function _restoreAPAtTurnStart(combatant) {
   const actor = combatant.actor;
-  if (actor) {
-    const maxAP = actor.system?.ap?.max ?? CONFIG.COMBAT.DEFAULT_AP;
-    const currentAP = actor.system?.ap?.value ?? 0;
-    if (currentAP < maxAP) {
-      await actor.update({ 'system.ap.value': maxAP });
-      debug(`${combatant.name} AP restored to ${maxAP}`);
-    } else if (currentAP > maxAP) {
-      debug(`${combatant.name} has bonus AP (${currentAP}/${maxAP}) - preserving`);
+  if (!actor) return;
+  const maxAP = actor.system?.ap?.max ?? CONFIG.COMBAT.DEFAULT_AP;
+  const currentAP = actor.system?.ap?.value ?? 0;
+  if (currentAP < maxAP) {
+    await actor.update({ 'system.ap.value': maxAP });
+    debug(`${combatant.name} AP restored to ${maxAP}`);
+  } else if (currentAP > maxAP) {
+    debug(`${combatant.name} has bonus AP (${currentAP}/${maxAP}) - preserving`);
+  }
+}
+
+// Apply restorations that were queued by macros with "At Turn Start" or
+// "At Turn End" checked. Pending entries live on the target actor's
+// flags.souls-d20.pendingRestorations and were stamped with their timing
+// at queue time by threatSystem._queueDeferredRestoration.
+async function _drainPendingRestorations(combatant, timing) {
+  const actor = combatant.actor;
+  if (!actor) return;
+
+  const pending = actor.getFlag(CONFIG.MODULE_ID, 'pendingRestorations') || [];
+  if (pending.length === 0) return;
+
+  const ready = pending.filter(p => p?.timing === timing);
+  const remaining = pending.filter(p => p?.timing !== timing);
+  if (ready.length === 0) return;
+
+  for (const entry of ready) {
+    const calcResult = entry.calcResult;
+    if (!calcResult) continue;
+
+    const applyResult = applyRestorationToActor(actor, calcResult);
+    const update = { ...(applyResult.updates || {}) };
+    for (const [k, v] of Object.entries(applyResult.flagUpdates || {})) {
+      update[`flags.${CONFIG.MODULE_ID}.${k}`] = v;
     }
-  }
-
-  // Passive HP/FP regeneration (resource recovery happens before status effects per rulebook)
-  const regenEnabled = game.settings.get(CONFIG.MODULE_ID, 'enablePassiveRegen');
-  if (regenEnabled && actor) {
-    // Read from actor combat settings (overrides.passiveRecovery.hpPerRound / fpPerRound)
-    const settings = getActorCombatSettings(actor);
-    const hpRegen = settings.overrides?.passiveRecovery?.hpPerRound || 0;
-    const fpRegen = settings.overrides?.passiveRecovery?.fpPerRound || 0;
-    if (hpRegen !== 0 || fpRegen !== 0) {
-      await applyPassiveRegeneration(actor, hpRegen, fpRegen, combatant.name);
-    }
-  }
-
-  // Turn-start automation: status effects/conditions procing and ending (GM only)
-  if (actor && game.user.isGM) {
-    await _processTurnStartAutomation(actor, token, combatant.name, combat.round);
-  }
-
-  // Handle AOE template duration tracking (GM only — scene document modifications require GM permissions)
-  if (game.user.isGM) {
-    // Determine previous combatant (whose turn just ended)
-    // Use combat.previous if available (Foundry V11+), otherwise calculate from changed values
-    let prevCombatant = null;
-
-    debug(`[AOE Turn] Turn change detected: changed.turn=${changed.turn}, changed.round=${changed.round}, combat.turn=${combat.turn}, combat.round=${combat.round}`);
-    debug(`[AOE Turn] combat.previous: ${JSON.stringify(combat.previous)}`);
-
-    if (combat.previous?.combatantId) {
-      // V11+ reliable method: use the stored previous combatant ID
-      prevCombatant = combat.combatants.get(combat.previous.combatantId);
-      debug(`[AOE Turn] Using combat.previous.combatantId: ${prevCombatant?.name || 'null'}`);
-    } else {
-      // Fallback for older versions: calculate from turn indices
-      const prevTurn = (changed.turn !== undefined) ? changed.turn - 1 : null;
-      const roundChanged = 'round' in changed;
-
-      debug(`[AOE Turn] Fallback: prevTurn=${prevTurn}, roundChanged=${roundChanged}`);
-
-      if (prevTurn !== null && prevTurn >= 0) {
-        prevCombatant = combat.turns[prevTurn];
-        debug(`[AOE Turn] Using prevTurn index ${prevTurn}: ${prevCombatant?.name || 'null'}`);
-      } else if (roundChanged || (prevTurn !== null && prevTurn < 0)) {
-        // Wrapped around to new round — previous was last combatant of prior round
-        // But ONLY if this isn't the very first turn of combat
-        const isFirstTurnEver = combat.round === 1 && combat.turn === 0 && !changed.round;
-        if (!isFirstTurnEver) {
-          prevCombatant = combat.turns[combat.turns.length - 1];
-          debug(`[AOE Turn] Wrapped around - using last combatant: ${prevCombatant?.name || 'null'}`);
-        } else {
-          debug(`[AOE Turn] First turn of combat - no previous combatant`);
-        }
-      } else {
-        debug(`[AOE Turn] No prevCombatant determined`);
+    if (Object.keys(update).length) {
+      try {
+        await actor.update(update);
+      } catch (err) {
+        warn(`Failed to apply deferred restoration to ${actor.name}:`, err);
       }
     }
 
-    // Duration 0 (instant): remove at end of caster's turn
-    if (prevCombatant) {
-      debug(`[AOE Turn] Calling handleTemplateEndOfTurn for: ${prevCombatant.name}`);
-      await handleTemplateEndOfTurn(prevCombatant);
-    }
-
-    // Duration >0: decrement at start of caster's turn
-    await handleTemplateDuration(combatant);
-
-    // Tick vulnerability durations at end of each combatant's turn
-    if (prevCombatant?.actor) {
-      await handleVulnerabilityDuration(prevCombatant.actor, combat.round);
-    }
+    const sourcePart = entry.sourceName ? ` from ${entry.sourceName}` : '';
+    const summary = (calcResult.breakdown || []).join(', ') || `${calcResult.type ?? 'restoration'}`;
+    postMaskedChat(actor, (displayName) =>
+      `<div class="sd20-deferred-restoration"><strong>${displayName}</strong> receives queued restoration at ${timing === 'start' ? 'turn start' : 'turn end'}${sourcePart}: ${summary}</div>`
+    );
   }
+
+  await actor.setFlag(CONFIG.MODULE_ID, 'pendingRestorations', remaining);
+}
+
+async function _applyPassiveRecoveryForTiming(combatant, timing) {
+  const regenEnabled = game.settings.get(CONFIG.MODULE_ID, 'enablePassiveRegen');
+  if (!regenEnabled) return;
+
+  const actor = combatant.actor;
+  if (!actor) return;
+
+  const settings = getActorCombatSettings(actor);
+  const pr = settings.overrides?.passiveRecovery || {};
+
+  // Legacy schema had only `hpPerRound` / `fpPerRound`, both treated as turn
+  // start. We map them to the new start fields if the new names are absent
+  // so existing actors keep working without a migration step.
+  const hpStart = pr.hpPerRoundStart ?? pr.hpPerRound ?? 0;
+  const fpStart = pr.fpPerRoundStart ?? pr.fpPerRound ?? 0;
+  const hpEnd   = pr.hpPerRoundEnd ?? 0;
+  const fpEnd   = pr.fpPerRoundEnd ?? 0;
+
+  const hpAmount = timing === 'start' ? hpStart : hpEnd;
+  const fpAmount = timing === 'start' ? fpStart : fpEnd;
+
+  if (hpAmount <= 0 && fpAmount <= 0) return;
+
+  await applyPassiveRegeneration(actor, hpAmount, fpAmount, combatant.name);
 }
 
 /**

@@ -404,16 +404,24 @@
   <div class="cs-tab-body {{#unless (eq activeTab 'recovery')}}hidden{{/unless}}" data-tab-body="recovery">
 
     <fieldset class="cs-fieldset">
-      <legend>Passive Recovery (per Round)</legend>
-      <p class="cs-hint">Flat HP/FP recovered at the start of each round through the normal recovery flow.</p>
+      <legend>Passive Recovery (per Turn)</legend>
+      <p class="cs-hint">Flat HP/FP recovered at the start or end of this actor's turn in combat. Leave a value at 0 to disable that timing.</p>
       <div class="cs-override-table cs-override-table-healing">
         <div class="cs-override-row">
-          <span>HP Recovery per Round</span>
-          <input type="number" name="overrides.passiveRecovery.hpPerRound" value="{{settings.overrides.passiveRecovery.hpPerRound}}" min="0" />
+          <span>HP Recovery (Turn Start)</span>
+          <input type="number" name="overrides.passiveRecovery.hpPerRoundStart" value="{{passiveHpStart}}" min="0" />
         </div>
         <div class="cs-override-row">
-          <span>FP Recovery per Round</span>
-          <input type="number" name="overrides.passiveRecovery.fpPerRound" value="{{settings.overrides.passiveRecovery.fpPerRound}}" min="0" />
+          <span>HP Recovery (Turn End)</span>
+          <input type="number" name="overrides.passiveRecovery.hpPerRoundEnd" value="{{settings.overrides.passiveRecovery.hpPerRoundEnd}}" min="0" />
+        </div>
+        <div class="cs-override-row">
+          <span>FP Recovery (Turn Start)</span>
+          <input type="number" name="overrides.passiveRecovery.fpPerRoundStart" value="{{passiveFpStart}}" min="0" />
+        </div>
+        <div class="cs-override-row">
+          <span>FP Recovery (Turn End)</span>
+          <input type="number" name="overrides.passiveRecovery.fpPerRoundEnd" value="{{settings.overrides.passiveRecovery.fpPerRoundEnd}}" min="0" />
         </div>
       </div>
     </fieldset>

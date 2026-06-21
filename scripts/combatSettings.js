@@ -322,6 +322,13 @@ export class CombatSettingsDialog extends HandlebarsApplicationMixin(Application
     const nameRevealed = this.actor.getFlag(CONFIG.MODULE_ID, 'nameRevealed') === true;
     const isGM = game.user.isGM;
 
+    // Passive recovery legacy-aware display values. The new "start" fields
+    // take precedence; if they are 0 and the old `hpPerRound` is set, surface
+    // that as the start value so existing actors do not show empty fields.
+    const passiveRecovery = settings.overrides?.passiveRecovery || {};
+    const passiveHpStart = passiveRecovery.hpPerRoundStart || passiveRecovery.hpPerRound || 0;
+    const passiveFpStart = passiveRecovery.fpPerRoundStart || passiveRecovery.fpPerRound || 0;
+
     return {
       activeTab: this._activeTab,
       settings,
@@ -329,6 +336,8 @@ export class CombatSettingsDialog extends HandlebarsApplicationMixin(Application
       isGM,
       nameRevealed,
       isUnlinkedToken: this.isUnlinkedToken,
+      passiveHpStart,
+      passiveFpStart,
       npcResistances,
       npcStatusThresholds,
       npcStats,

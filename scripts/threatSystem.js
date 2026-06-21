@@ -21,8 +21,38 @@ import { playMacroAnimation, isAnimationSystemAvailable, playStatusAnimation } f
 const MODULE = CONFIG.MODULE_ID;
 const { DialogV2 } = foundry.applications.api;
 
+// Defer a restoration onto the target actor's flags so the combat tracker can
+// apply it at turn start or turn end. Mutates the caller's flagUpdates so the
+// write happens in the same batch as the rest of the comp commit.
+function _queueDeferredRestoration(flagUpdates, actor, calcResult, comp, sourceName) {
+  const timings = [];
+  if (comp.atTurnStart) timings.push('start');
+  if (comp.atTurnEnd) timings.push('end');
+  if (timings.length === 0) return false;
+
+  const current = actor.getFlag(MODULE, 'pendingRestorations') || [];
+  // Earlier entries in this same batch live in flagUpdates if multiple
+  // deferred restorations are queued back-to-back; prefer those.
+  const accumulated = flagUpdates['pendingRestorations'] ?? current;
+  const newEntries = timings.map(timing => ({
+    id: foundry.utils.randomID(),
+    timing,
+    calcResult: foundry.utils.deepClone(calcResult),
+    sourceName: sourceName || null,
+    queuedRound: game.combat?.round ?? null,
+    queuedTurn: game.combat?.turn ?? null
+  }));
+  flagUpdates['pendingRestorations'] = [...accumulated, ...newEntries];
+  return true;
+}
+
 // In-memory store of pending threat events
 const pendingEvents = new Map();
+
+// Tracks which executionIds have already received an aoe-reveal component.
+// Reactive Reveal macros hitting N targets only need ONE reveal action, not N.
+// Cleared when the execution batch finishes (see _checkBatchCompletion).
+const _executionAoeReveal = new Set();
 
 // Execution batch tracking for macro chaining
 // Maps executionId → { eventIds: Set, resolvedIds: Set, callback: Function }
@@ -63,6 +93,7 @@ export function getPendingCount() {
 export function clearAllEvents() {
   pendingEvents.clear();
   _executionBatches.clear();
+  _executionAoeReveal.clear();
   _notifyPanel();
   log('All threat events cleared');
 }
@@ -97,6 +128,7 @@ async function _checkBatchCompletion(executionId) {
 
   // All events resolved (removed from pendingEvents)
   _executionBatches.delete(executionId);
+  _executionAoeReveal.delete(executionId);
   debug(`Execution batch ${executionId} complete`);
 
   // Play deferred animation if configured
@@ -189,7 +221,7 @@ export function registerExecutionBatch(executionId, callback) {
  * @param {string|null} executionId - Optional batch ID for tracking macro execution completion
  * @param {Object|null} animationContext - Animation data for deferred playback after ruling
  */
-export function createThreatEvent(attackerToken, defenderToken, macro, combatResults, deferredChatData = null, executionId = null, animationContext = null) {
+export function createThreatEvent(attackerToken, defenderToken, macro, combatResults, deferredChatData = null, executionId = null, animationContext = null, options = {}) {
   const defenderActor = defenderToken.actor;
   if (!defenderActor) {
     debug('No actor on defender token, skipping threat event');
@@ -327,6 +359,24 @@ export function createThreatEvent(attackerToken, defenderToken, macro, combatRes
   // NOTE: Restoration components do NOT go through threat events.
   // They are handled separately via createRestorationEvent().
 
+  // Reactive Reveal: add a single macro-level reveal component on the first
+  // threat event of this execution batch. Multiple targets share one reveal,
+  // not one per target. The component carries the templateId so the GM's
+  // approve action can flip hidden=false on the MeasuredTemplate.
+  const isReactiveReveal = macro.aoe?.playerVisibility === 'reactiveReveal';
+  if (isReactiveReveal && executionId && !_executionAoeReveal.has(executionId)) {
+    _executionAoeReveal.add(executionId);
+    components.push({
+      id: foundry.utils.randomID(),
+      type: 'aoe-reveal',
+      ruling: CONFIG.RULING_STATES.PENDING,
+      templateId: options.aoeTemplateId || null,
+      macroName: macro.name,
+      autoReason: null,
+      result: null
+    });
+  }
+
   // Skip if no components
   if (components.length === 0) return null;
 
@@ -394,7 +444,7 @@ export function createThreatEvent(attackerToken, defenderToken, macro, combatRes
  * @param {string|null} executionId - Optional batch ID for tracking macro execution completion
  * @param {Object|null} animationContext - Animation data for deferred playback after ruling
  */
-export function createRestorationEvent(casterToken, targetToken, macro, combatResults, deferredChatData = null, executionId = null, animationContext = null) {
+export function createRestorationEvent(casterToken, targetToken, macro, combatResults, deferredChatData = null, executionId = null, animationContext = null, options = {}) {
   const targetActor = targetToken.actor;
   if (!targetActor) return null;
 
@@ -406,13 +456,15 @@ export function createRestorationEvent(casterToken, targetToken, macro, combatRe
     components.push({
       id: foundry.utils.randomID(),
       type: rest.type || 'heal-hp',
-      originalIndex: i,  // Track original index for progressive reveal
+      originalIndex: i,
       rawAmount: rest.total || 0,
       formula: rest.formula || '',
       statusEffect: rest.statusEffect || null,
       conditions: rest.conditions || [],
       statusEffects: rest.statusEffects || [],
       allowOverMax: rest.allowOverMax || false,
+      atTurnStart: !!rest.atTurnStart,
+      atTurnEnd: !!rest.atTurnEnd,
       ruling: CONFIG.RULING_STATES.PENDING,
       autoReason: null,
       result: null
@@ -482,6 +534,22 @@ export function createRestorationEvent(casterToken, targetToken, macro, combatRe
       applyToCaster: prot.applyToCaster || false,
       applyToTarget: prot.applyToTarget || true,
       ruling: CONFIG.RULING_STATES.PENDING,
+      autoReason: null,
+      result: null
+    });
+  }
+
+  // Reactive Reveal: add the single reveal component on the first restoration
+  // event of this execution batch if a threat event has not already claimed it.
+  const isReactiveReveal = macro.aoe?.playerVisibility === 'reactiveReveal';
+  if (isReactiveReveal && executionId && !_executionAoeReveal.has(executionId)) {
+    _executionAoeReveal.add(executionId);
+    components.push({
+      id: foundry.utils.randomID(),
+      type: 'aoe-reveal',
+      ruling: CONFIG.RULING_STATES.PENDING,
+      templateId: options.aoeTemplateId || null,
+      macroName: macro.name,
       autoReason: null,
       result: null
     });
@@ -782,6 +850,32 @@ export async function resolveAllComponents(eventId, ruling) {
 async function _executeComponent(comp, defenderActor, currentRound, attackerActorId = null, event = null) {
   debug(`_executeComponent called: type=${comp.type}, rawAmount=${comp.rawAmount}, actor=${defenderActor?.name}, isImmune=${comp.isImmune}`);
 
+  // Reactive Reveal: macro-level component that does not touch the defender.
+  // Approve flips the MeasuredTemplate's hidden flag to false so all players
+  // see the AoE overlay on the canvas. Handled before the immunity gate
+  // because immunity is per-defender and does not apply here.
+  if (comp.type === 'aoe-reveal') {
+    const templateId = comp.templateId;
+    if (!templateId) {
+      comp.result = { revealed: false, error: 'no templateId on component' };
+      return;
+    }
+    const templateDoc = canvas.scene?.templates?.get(templateId);
+    if (!templateDoc) {
+      comp.result = { revealed: false, error: 'template no longer exists' };
+      return;
+    }
+    try {
+      await templateDoc.update({ hidden: false });
+      comp.result = { revealed: true };
+      debug(`AoE template ${templateId} revealed to players`);
+    } catch (err) {
+      comp.result = { revealed: false, error: String(err) };
+      console.warn('Failed to reveal AoE template:', err);
+    }
+    return;
+  }
+
   // If component is immune, skip actual application but record the result
   if (comp.isImmune) {
     debug(`Component is immune, skipping application`);
@@ -924,43 +1018,66 @@ async function _executeComponent(comp, defenderActor, currentRound, attackerActo
       break;
     }
 
-    // Restoration types
+    // Restoration types. If atTurnStart or atTurnEnd is checked on the
+    // component, do not apply now. Queue the calc result on the target
+    // actor's pendingRestorations flag and let the combat tracker drain
+    // it at the configured timing. If neither is checked, apply immediately.
     case 'heal-hp':
     case 'restore-fp':
     case 'restore-ap': {
       const restComp = { type: comp.type, amount: comp.rawAmount, allowOverMax: comp.allowOverMax };
       const calcResult = calculateRestoration(restComp, defenderActor);
-      const applyResult = applyRestorationToActor(defenderActor, calcResult);
-      Object.assign(systemUpdates, applyResult.updates || {});
-      Object.assign(flagUpdates, applyResult.flagUpdates || {});
-      comp.result = { calcResult, applyResult };
+      if (comp.atTurnStart || comp.atTurnEnd) {
+        _queueDeferredRestoration(flagUpdates, defenderActor, calcResult, comp, comp.sourceName);
+        comp.result = { calcResult, deferred: true };
+      } else {
+        const applyResult = applyRestorationToActor(defenderActor, calcResult);
+        Object.assign(systemUpdates, applyResult.updates || {});
+        Object.assign(flagUpdates, applyResult.flagUpdates || {});
+        comp.result = { calcResult, applyResult };
+      }
       break;
     }
 
     case 'reduce-buildup': {
       const restComp = { type: 'reduce-buildup', statusEffect: comp.statusEffect, amount: comp.rawAmount };
       const calcResult = calculateRestoration(restComp, defenderActor);
-      const applyResult = applyRestorationToActor(defenderActor, calcResult);
-      Object.assign(flagUpdates, applyResult.flagUpdates || {});
-      comp.result = { calcResult, applyResult };
+      if (comp.atTurnStart || comp.atTurnEnd) {
+        _queueDeferredRestoration(flagUpdates, defenderActor, calcResult, comp, comp.sourceName);
+        comp.result = { calcResult, deferred: true };
+      } else {
+        const applyResult = applyRestorationToActor(defenderActor, calcResult);
+        Object.assign(flagUpdates, applyResult.flagUpdates || {});
+        comp.result = { calcResult, applyResult };
+      }
       break;
     }
 
     case 'cure-condition': {
       const restComp = { type: 'cure-condition', conditions: comp.conditions || [] };
       const calcResult = calculateRestoration(restComp, defenderActor);
-      const applyResult = applyRestorationToActor(defenderActor, calcResult);
-      Object.assign(flagUpdates, applyResult.flagUpdates || {});
-      comp.result = { calcResult, applyResult };
+      if (comp.atTurnStart || comp.atTurnEnd) {
+        _queueDeferredRestoration(flagUpdates, defenderActor, calcResult, comp, comp.sourceName);
+        comp.result = { calcResult, deferred: true };
+      } else {
+        const applyResult = applyRestorationToActor(defenderActor, calcResult);
+        Object.assign(flagUpdates, applyResult.flagUpdates || {});
+        comp.result = { calcResult, applyResult };
+      }
       break;
     }
 
     case 'cure-effect': {
       const restComp = { type: 'cure-effect', statusEffects: comp.statusEffects || [] };
       const calcResult = calculateRestoration(restComp, defenderActor);
-      const applyResult = applyRestorationToActor(defenderActor, calcResult);
-      Object.assign(flagUpdates, applyResult.flagUpdates || {});
-      comp.result = { calcResult, applyResult };
+      if (comp.atTurnStart || comp.atTurnEnd) {
+        _queueDeferredRestoration(flagUpdates, defenderActor, calcResult, comp, comp.sourceName);
+        comp.result = { calcResult, deferred: true };
+      } else {
+        const applyResult = applyRestorationToActor(defenderActor, calcResult);
+        Object.assign(flagUpdates, applyResult.flagUpdates || {});
+        comp.result = { calcResult, applyResult };
+      }
       break;
     }
 
