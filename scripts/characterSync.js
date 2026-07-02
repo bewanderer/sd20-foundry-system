@@ -8,7 +8,10 @@ import { log, debug, warn, findTokenByUUID, getTokenCharacterUUID } from './util
 
 const RESPONSE_DEDUPE_WINDOW_MS = 500;
 const RECONNECT_RESYNC_WINDOW_MS = 30000;
-const CHARACTER_UPDATE_DEBOUNCE_MS = 100;
+// Item 5 (Batch C): Phase 2 decision A. Raised from 100 to 500 so rapid
+// successive edits (typing a stat, toggling two-handing) coalesce into
+// one _processCharacterUpdate pass instead of a burst.
+const CHARACTER_UPDATE_DEBOUNCE_MS = 500;
 
 const _recentResponses = new Map();
 const _reconnectSnapshots = new Map();
@@ -102,6 +105,15 @@ export function registerCharacterSyncHandlers() {
   // Handle single character update
   bcm.on(CONFIG.MESSAGE_TYPES.CHARACTER_UPDATE, (data) => {
     handleCharacterUpdate(data);
+  });
+
+  // Optimization 3: field-scoped delta. Merges into the stored snapshot and
+  // regenerates only the macros affected by the changed fields. Falls back to
+  // full CHARACTER_UPDATE if the delta cannot be reconciled.
+  bcm.on(CONFIG.MESSAGE_TYPES.CHARACTER_DELTA_UPDATE, (data) => {
+    handleCharacterDelta(data).catch(err => {
+      debug('handleCharacterDelta failed, ignoring:', err);
+    });
   });
 
   // Handle combat data response (for immediate fetch on first link)
@@ -615,6 +627,63 @@ function handleCharacterListResponse(data) {
   syncAllLinkedTokens(data.characters);
 }
 
+/**
+ * Optimization 3: apply a field-scoped delta from the App.
+ *
+ * Shape of `data`:
+ *   { uuid, delta: { 'stats.strength': 16, 'combat_settings.twoHandingMainHand': true, ... } }
+ * or
+ *   { uuid, delta: { stats: { strength: 16 }, ... } }  (nested object form)
+ *
+ * We merge the delta into the actor's stored characterData snapshot, invalidate
+ * the affected macro cache entries, and let the next macro-bar render pull
+ * fresh macros without a full App round trip.
+ */
+async function handleCharacterDelta(data) {
+  if (!data?.uuid || !data.delta || typeof data.delta !== 'object') {
+    debug('CHARACTER_DELTA_UPDATE ignored: missing uuid or delta');
+    return;
+  }
+
+  const uuid = data.uuid;
+  const character = game.sd20?.characters?.[uuid];
+  if (!character) {
+    debug(`CHARACTER_DELTA_UPDATE for ${uuid}: no cached character, falling back to CHARACTER_UPDATE`);
+    return;
+  }
+
+  // Merge delta into the in-memory character snapshot. Supports both nested
+  // object shape and dot-path key shape.
+  for (const [key, value] of Object.entries(data.delta)) {
+    if (key.includes('.')) {
+      foundry.utils.setProperty(character, key, value);
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      foundry.utils.mergeObject(character[key] ?? (character[key] = {}), value, { inplace: true });
+    } else {
+      character[key] = value;
+    }
+  }
+
+  // Item 4 (Batch C): also merge the delta into the macro manager's cached
+  // combatData so a subsequent getMacros can regenerate without a WS round
+  // trip. Then mark the affected categories stale via changedFields so the
+  // regen path fires.
+  try {
+    const { mergeDeltaIntoCache } = await import('./macroManager.js');
+    mergeDeltaIntoCache(uuid, data.delta);
+  } catch (err) {
+    debug('mergeDeltaIntoCache import failed:', err);
+  }
+
+  const mgr = game.sd20?.macroManager;
+  if (mgr?.invalidateCache) mgr.invalidateCache(uuid, Object.keys(data.delta));
+
+  const token = findTokenByUUID(uuid);
+  if (token) {
+    updateTokenFromCharacter(token, character);
+  }
+}
+
 function handleCharacterUpdate(data) {
   if (!data?.uuid) {
     warn('Invalid character update data:', data);
@@ -645,6 +714,14 @@ function _processCharacterUpdate(uuid, data) {
   if (game.sd20.characters[uuid]) {
     Object.assign(game.sd20.characters[uuid], data);
   }
+
+  // Item 2 (Batch C): invalidate cached macros for this uuid so the next
+  // macro-bar render regenerates from fresh data. Without this, macros
+  // sit on the pre-update cache until the 30s TTL expires. That was the
+  // Bug 6 root cause: two-handing toggled on the App would take up to
+  // 30s to reflect in Foundry macros.
+  const mgr = game.sd20?.macroManager;
+  if (mgr?.invalidateCache) mgr.invalidateCache(uuid);
 
   const token = findTokenByUUID(uuid);
   if (!token) {

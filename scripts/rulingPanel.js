@@ -36,10 +36,12 @@ export class RulingPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     actions: {
       approveComp: RulingPanel.#onApproveComp,
       denyComp: RulingPanel.#onDenyComp,
+      rollOnlyComp: RulingPanel.#onRollOnlyComp,
       autoSucceed: RulingPanel.#onAutoSucceed,
       autoFail: RulingPanel.#onAutoFail,
       approveAll: RulingPanel.#onApproveAll,
       denyAll: RulingPanel.#onDenyAll,
+      rollOnlyAll: RulingPanel.#onRollOnlyAll,
       clearAll: RulingPanel.#onClearAll
     }
   };
@@ -150,6 +152,16 @@ export class RulingPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     await resolveComponent(eventId, compId, CONFIG.RULING_STATES.DENIED);
   }
 
+  // Bug 12: roll dice, render result in chat, but do not mutate the actor.
+  // Useful when a rule (e.g. block, immunity narrative beat) means the value
+  // is visible to the table but no HP delta should land.
+  static async #onRollOnlyComp(event, target) {
+    target.disabled = true;
+    const eventId = target.dataset.eventId;
+    const compId = target.dataset.compId;
+    await resolveComponent(eventId, compId, CONFIG.RULING_STATES.ROLL_ONLY);
+  }
+
   static async #onAutoSucceed(event, target) {
     target.disabled = true;
     const eventId = target.dataset.eventId;
@@ -180,6 +192,17 @@ export class RulingPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     eventEl?.querySelectorAll('.ruling-btn').forEach(btn => btn.disabled = true);
     const eventId = target.dataset.eventId;
     await resolveAllComponents(eventId, CONFIG.RULING_STATES.DENIED);
+  }
+
+  // Bug 12: bulk roll-only. Every still-pending component in the event rolls
+  // but skips the actor mutation. The event chat shows all the values with a
+  // "not applied" badge per row.
+  static async #onRollOnlyAll(event, target) {
+    target.disabled = true;
+    const eventEl = target.closest('.ruling-event');
+    eventEl?.querySelectorAll('.ruling-btn').forEach(btn => btn.disabled = true);
+    const eventId = target.dataset.eventId;
+    await resolveAllComponents(eventId, CONFIG.RULING_STATES.ROLL_ONLY);
   }
 
   static async #onClearAll() {

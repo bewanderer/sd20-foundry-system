@@ -5,8 +5,12 @@
 
 import { log, warn } from './utils.js';
 import { CONFIG } from './config.js';
+import { normalizeMacroSets } from './macroNormalize.js';
 
-const MIGRATION_VERSION = 2;
+// Bug 4: v3 walks every actor/token macroSets and assigns id + _source tags
+// to combat sub-array entries so re-link merges by stable id instead of by
+// content-derived identity.
+const MIGRATION_VERSION = 3;
 const RESTRICTED_CATEGORIES = ['initiative', 'skillChecks', 'knowledgeChecks', 'statChecks'];
 
 /**
@@ -126,6 +130,21 @@ async function migrateActor(actor, revertedTracker) {
     }
   }
 
+  // Bug 4: assign id + _source to every combat entry that lacks one. Reads
+  // the freshest structure from either updates['system.macroSets'] (if we
+  // already touched it above) or actor.system.macroSets. Idempotent.
+  const workingMacroSets = updates['system.macroSets'] ?? actor.system?.macroSets;
+  if (workingMacroSets) {
+    const beforeSerialized = JSON.stringify(workingMacroSets);
+    const cloned = updates['system.macroSets'] ? workingMacroSets : foundry.utils.deepClone(workingMacroSets);
+    normalizeMacroSets(cloned, 'app');
+    const afterSerialized = JSON.stringify(cloned);
+    if (beforeSerialized !== afterSerialized) {
+      updates['system.macroSets'] = cloned;
+      hasChanges = true;
+    }
+  }
+
   if (hasChanges) {
     await actor.update(updates);
     log(`Migrated Actor "${actor.name}": ${Object.keys(updates).join(', ')}`);
@@ -181,14 +200,21 @@ async function migrateToken(tokenDoc, revertedTracker) {
     if (tokenMacroSets) {
       const cloned = foundry.utils.deepClone(tokenMacroSets);
       const reverted = revertCorruptedCheckMacros(cloned);
-      if (reverted > 0) {
+      // Bug 4: normalize the same token macroSets clone so unlinked NPCs get
+      // stable ids too. Idempotent.
+      normalizeMacroSets(cloned, 'custom');
+      const beforeSerialized = JSON.stringify(tokenMacroSets);
+      const afterSerialized = JSON.stringify(cloned);
+      if (reverted > 0 || beforeSerialized !== afterSerialized) {
         try {
           await tokenDoc.setFlag(CONFIG.MODULE_ID, 'macroSets', cloned);
-          revertedTracker.total += reverted;
-          revertedTracker.tokens.push(`${tokenDoc.name}(${reverted})`);
+          if (reverted > 0) {
+            revertedTracker.total += reverted;
+            revertedTracker.tokens.push(`${tokenDoc.name}(${reverted})`);
+          }
           touched = true;
         } catch (e) {
-          warn(`Could not revert check macros on token "${tokenDoc.name}":`, e);
+          warn(`Could not update macroSets on token "${tokenDoc.name}":`, e);
         }
       }
     }

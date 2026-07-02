@@ -6,6 +6,7 @@
 
 import { CONFIG } from './config.js';
 import { log, debug } from './utils.js';
+import { normalizeMacroEntries } from './macroNormalize.js';
 
 // Storage constants
 const FLAG_KEY = 'macroLibrary';
@@ -1044,6 +1045,11 @@ function _getMacroBarForActor(actor) {
 
       const setData = macroSets.sets[activeSet];
       if (!setData.macros) setData.macros = [];
+
+      // Bug 4: this proxy path skips the primary macroBar and would otherwise
+      // land untagged entries on the actor. Normalize before writing.
+      const defaultSource = macro?.source === CONFIG.MACRO_SOURCES.APP ? 'app' : 'custom';
+      normalizeMacroEntries(macro, defaultSource);
 
       if (slot !== null && slot !== undefined) {
         while (setData.macros.length <= slot) setData.macros.push(null);

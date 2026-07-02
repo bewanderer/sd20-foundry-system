@@ -936,6 +936,10 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
 
   _initCombatArray(existing, defaultTemplate) {
     if (!existing || !Array.isArray(existing) || existing.length === 0) return [];
+    // Bug 4: default source depends on the macro being edited. When editing an
+    // App macro, entries without a tag are assumed to have originated from App.
+    // When editing a custom macro, they are custom.
+    const defaultSource = this.isAppMacro ? 'app' : 'custom';
     return existing.map(item => {
       const merged = { ...defaultTemplate, ...item };
       // Deep merge piercing object if present in default
@@ -956,6 +960,9 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
       ) {
         merged.scalingSource = 'manual';
       }
+      // Bug 4: preserve id + _source from stored data, mint fresh ones on legacy.
+      if (!merged.id) merged.id = foundry.utils.randomID();
+      if (!merged._source) merged._source = defaultSource;
       return merged;
     });
   }
@@ -1418,7 +1425,9 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddDamageType(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatDamageTypes : this.combatDamageTypes;
-    arr.push({ ...DEFAULT_DAMAGE_TYPE });
+    // Bug 4: player-added entries are always custom, regardless of the macro's
+    // own source. That keeps App re-link from replacing or dropping them.
+    arr.push({ ...DEFAULT_DAMAGE_TYPE, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1447,7 +1456,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddStatusEffect(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatStatusEffects : this.combatStatusEffects;
-    arr.push({ ...DEFAULT_STATUS_EFFECT });
+    arr.push({ ...DEFAULT_STATUS_EFFECT, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1462,7 +1471,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddStatusCondition(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatStatusConditions : this.combatStatusConditions;
-    arr.push({ ...DEFAULT_STATUS_CONDITION });
+    arr.push({ ...DEFAULT_STATUS_CONDITION, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1477,7 +1486,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddRestoration(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatRestoration : this.combatRestoration;
-    arr.push({ ...DEFAULT_RESTORATION });
+    arr.push({ ...DEFAULT_RESTORATION, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1492,7 +1501,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddVulnerability(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatVulnerabilities : this.combatVulnerabilities;
-    arr.push({ ...DEFAULT_VULNERABILITY });
+    arr.push({ ...DEFAULT_VULNERABILITY, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1508,7 +1517,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddDamageProtection(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatDamageProtection : this.combatDamageProtection;
-    arr.push({ ...DEFAULT_DAMAGE_PROTECTION });
+    arr.push({ ...DEFAULT_DAMAGE_PROTECTION, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1523,7 +1532,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddBuildupProtection(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatBuildupProtection : this.combatBuildupProtection;
-    arr.push({ ...DEFAULT_BUILDUP_PROTECTION });
+    arr.push({ ...DEFAULT_BUILDUP_PROTECTION, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1538,7 +1547,7 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
   static #onAddConditionProtection(event, target) {
     this._saveCombatFormState();
     const arr = target.closest('[data-combat-tab="secondary"]') ? this.secondaryCombatConditionProtection : this.combatConditionProtection;
-    arr.push({ ...DEFAULT_CONDITION_PROTECTION });
+    arr.push({ ...DEFAULT_CONDITION_PROTECTION, id: foundry.utils.randomID(), _source: 'custom' });
     this.render();
   }
 
@@ -1694,6 +1703,9 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     };
 
     const damageTypes = arrays.damageTypes.map((entry, i) => ({
+      // Bug 4: preserve per-entry id + _source through the DOM re-read.
+      id: entry.id,
+      _source: entry._source,
       type: el.querySelector(`[name="${prefix}.damageTypes[${i}].type"]`)?.value || entry.type,
       diceCount: parseInt(el.querySelector(`[name="${prefix}.damageTypes[${i}].diceCount"]`)?.value) || entry.diceCount,
       diceSides: parseInt(el.querySelector(`[name="${prefix}.damageTypes[${i}].diceSides"]`)?.value) || entry.diceSides,
@@ -1709,6 +1721,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     }));
 
     const statusEffects = arrays.statusEffects.map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       name: el.querySelector(`[name="${prefix}.statusEffects[${i}].name"]`)?.value || entry.name,
       diceCount: parseInt(el.querySelector(`[name="${prefix}.statusEffects[${i}].diceCount"]`)?.value) || entry.diceCount,
       diceSides: parseInt(el.querySelector(`[name="${prefix}.statusEffects[${i}].diceSides"]`)?.value) || entry.diceSides,
@@ -1719,6 +1733,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     }));
 
     const statusConditions = arrays.statusConditions.map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       name: el.querySelector(`[name="${prefix}.statusConditions[${i}].name"]`)?.value || entry.name,
       duration: parseInt(el.querySelector(`[name="${prefix}.statusConditions[${i}].duration"]`)?.value) || 0,
       noSave: el.querySelector(`[name="${prefix}.statusConditions[${i}].noSave"]`)?.checked || false,
@@ -1732,6 +1748,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     const restoration = arrays.restoration.map((entry, i) => {
       const type = el.querySelector(`[name="${prefix}.restoration[${i}].type"]`)?.value || entry.type;
       const result = {
+        id: entry.id,
+        _source: entry._source,
         type,
         diceCount: parseInt(el.querySelector(`[name="${prefix}.restoration[${i}].diceCount"]`)?.value) || entry.diceCount,
         diceSides: parseInt(el.querySelector(`[name="${prefix}.restoration[${i}].diceSides"]`)?.value) || entry.diceSides,
@@ -1754,6 +1772,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     });
 
     const vulnerabilities = (arrays.vulnerabilities || []).map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       type: el.querySelector(`[name="${prefix}.vulnerabilities[${i}].type"]`)?.value || entry.type,
       tiers: parseInt(el.querySelector(`[name="${prefix}.vulnerabilities[${i}].tiers"]`)?.value) || entry.tiers,
       flatTiers: parseInt(el.querySelector(`[name="${prefix}.vulnerabilities[${i}].flatTiers"]`)?.value) || 0,
@@ -1764,6 +1784,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
 
     // CF4: Protection arrays
     const damageProtection = (arrays.damageProtection || []).map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       type: el.querySelector(`[name="${prefix}.damageProtection[${i}].type"]`)?.value || entry.type,
       tiers: parseInt(el.querySelector(`[name="${prefix}.damageProtection[${i}].tiers"]`)?.value) || entry.tiers || 0,
       flat: parseInt(el.querySelector(`[name="${prefix}.damageProtection[${i}].flat"]`)?.value) || entry.flat || 0,
@@ -1781,6 +1803,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     }));
 
     const buildupProtection = (arrays.buildupProtection || []).map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       type: el.querySelector(`[name="${prefix}.buildupProtection[${i}].type"]`)?.value || entry.type,
       flat: parseInt(el.querySelector(`[name="${prefix}.buildupProtection[${i}].flat"]`)?.value) || entry.flat || 0,
       diceCount: parseInt(el.querySelector(`[name="${prefix}.buildupProtection[${i}].diceCount"]`)?.value) || entry.diceCount || 0,
@@ -1797,6 +1821,8 @@ export class CustomMacroBuilder extends HandlebarsApplicationMixin(ApplicationV2
     }));
 
     const conditionProtection = (arrays.conditionProtection || []).map((entry, i) => ({
+      id: entry.id,
+      _source: entry._source,
       condition: el.querySelector(`[name="${prefix}.conditionProtection[${i}].condition"]`)?.value || entry.condition,
       durationTurns: parseInt(el.querySelector(`[name="${prefix}.conditionProtection[${i}].durationTurns"]`)?.value) || entry.durationTurns || 0,
       durationAttacks: parseInt(el.querySelector(`[name="${prefix}.conditionProtection[${i}].durationAttacks"]`)?.value) || entry.durationAttacks || 0,

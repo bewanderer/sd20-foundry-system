@@ -7,6 +7,7 @@
 import { CONFIG } from './config.js';
 import { log, debug, resolveMaxUses } from './utils.js';
 import { getActiveMacroBar } from './macroBar.js';
+import { normalizeMacroEntries } from './macroNormalize.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -995,6 +996,11 @@ class ActorMacroBarProxy {
     if (!setData.macros) {
       setData.macros = [];
     }
+
+    // Bug 4: mirror macroBar's tagging so this alternate write path does not
+    // strip per-entry id + _source.
+    const defaultSource = macro?.source === CONFIG.MACRO_SOURCES.APP ? 'app' : 'custom';
+    normalizeMacroEntries(macro, defaultSource);
 
     if (slot !== null && slot !== undefined) {
       // Expand array if needed to fit the slot

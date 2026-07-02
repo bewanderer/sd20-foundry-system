@@ -283,11 +283,24 @@ async function handleCombatantAction(action, combatant, combat) {
       const wasActive = combat.combatant?.id === combatant.id;
       await combatant.delete();
       if (wasActive) {
-        // Foundry removes the combatant but does not fire updateCombat with a
-        // turn change, so handleTurnChange never runs for the new active.
-        // Trigger it manually so AP restore + regen + status automation runs.
-        const newActive = combat.combatant;
-        if (newActive) {
+        // Bug 13: after delete(), combat.turn may point past the end of the
+        // shrunken combat.turns array. Foundry does not fire updateCombat with
+        // a turn change unless the numeric value differs, so we need to force
+        // an update with diff:false to guarantee the hook chain runs.
+        const total = combat.turns.length;
+        if (total === 0) {
+          // No combatants left. End combat entirely.
+          try { await combat.endCombat?.(); } catch { /* older foundry */ }
+        } else if (combat.turn >= total) {
+          // The removed active was last in initiative order. Wrap to a new round.
+          await combat.update({ turn: 0, round: combat.round + 1 }, { diff: false });
+        } else {
+          // Valid index into the shrunken array. Force the hook to fire.
+          await combat.update({ turn: combat.turn }, { diff: false });
+        }
+        // Manual invocation as a belt-and-suspenders fallback in case the
+        // updateCombat hook chain gets swallowed by another module.
+        if (combat.combatant) {
           await handleTurnChange(combat, { turn: combat.turn }, {}, game.user.id);
         }
       }
@@ -706,8 +719,13 @@ async function applyPassiveRegeneration(actor, hpRegen, fpRegen, name) {
 
   // Log to chat if anything was regenerated
   if (messages.length > 0) {
-    postMaskedChat(actor, (displayName) =>
-      `<div class="sd20-regen-message"><strong>${displayName}</strong> regenerates ${messages.join(', ')}</div>`
+    // Bug 15: monster recovery chat should be visible only to the GM and to
+    // the actor's owners. Players seeing the monster's regen values leaked
+    // strategic info they should not have.
+    postMaskedChat(
+      actor,
+      (displayName) => `<div class="sd20-regen-message"><strong>${displayName}</strong> regenerates ${messages.join(', ')}</div>`,
+      { whisperToOwner: true }
     );
   }
 }

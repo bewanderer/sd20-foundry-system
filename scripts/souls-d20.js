@@ -10,7 +10,8 @@ import { BroadcastChannelManager } from './broadcastChannel.js';
 import { log } from './utils.js';
 import { registerCharacterSyncHandlers } from './characterSync.js';
 import { canSeeActorName } from './permissions.js';
-import { initializeStatusIndicator, destroyStatusIndicator } from './statusIndicator.js';
+import { initializeStatusIndicator, destroyStatusIndicator, setConnected as setStatusConnected } from './statusIndicator.js';
+import { registerPerfObservability } from './perfObservability.js';
 import { registerTurnIndicator, registerTurnIndicatorSettings } from './turnIndicator.js';
 import { registerCombatTracker, registerCombatTrackerSettings } from './combatTracker.js';
 import { registerMacroManager } from './macroManager.js';
@@ -238,6 +239,9 @@ Hooks.once('ready', async () => {
 
   // Initialize connection status indicator
   initializeStatusIndicator();
+  // Bug 3: expose setConnected so broadcastChannel.js can force the three-state
+  // pill immediately on close/reconnect without waiting for the periodic check.
+  game.sd20.statusIndicator = { setConnected: setStatusConnected };
 
   // Register combat tracker enhancements
   registerTurnIndicator();
@@ -262,6 +266,10 @@ Hooks.once('ready', async () => {
   registerRulingPanel();
   registerAoERepeatUI();
   registerAoEGridHighlight();
+
+  // Register perf observability last so all systems are already listening
+  // for their own metrics when the socket handler comes online.
+  registerPerfObservability();
 
   // Initialize animation system (checks for Sequencer/JB2A)
   initAnimationSystem();

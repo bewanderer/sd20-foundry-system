@@ -3,6 +3,8 @@
  * Searchable preset selector for NPC actors with category grouping.
  */
 
+import { normalizeMacroEntries } from './macroNormalize.js';
+
 const MODULE_ID = 'souls-d20';
 let _presetsData = null;
 
@@ -87,6 +89,11 @@ async function applyPreset(actor, presetName) {
   }
 
   const macroSetId = 'set-1';
+  const presetMacros = _buildDefaultChecks(stats).concat(preset.macros.map(m => ({...m})));
+  // Bug 4: preset macros ship as JSON without per-entry id + _source. Stamp
+  // them as custom (monster presets never come from the App) so re-link or
+  // future edits treat them correctly.
+  for (const macro of presetMacros) normalizeMacroEntries(macro, 'custom');
   const macroSets = {
     activeSet: macroSetId,
     setOrder: [macroSetId],
@@ -94,7 +101,7 @@ async function applyPreset(actor, presetName) {
       [macroSetId]: {
         id: macroSetId,
         name: presetName,
-        macros: _buildDefaultChecks(stats).concat(preset.macros.map(m => ({...m}))),
+        macros: presetMacros,
         active: true
       }
     }

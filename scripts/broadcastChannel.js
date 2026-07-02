@@ -16,8 +16,11 @@ export class BroadcastChannelManager {
     this.connected = false;
     this.messageHandlers = new Map();
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 2000;
+    // Optimization 5 + Bug 3: ngrok flaps are common enough that 5 attempts at
+    // 2s each ran out in 10s and forced GMs to reload Foundry. Raise to match
+    // App-side (50 attempts at 3s = ~2.5 minutes of tolerance before giving up).
+    this.maxReconnectAttempts = 50;
+    this.reconnectDelay = 3000;
     this.authClosed = false;
 
     Hooks.on('sd20.appAuth.changed', ({ signedIn }) => {
@@ -79,10 +82,24 @@ export class BroadcastChannelManager {
       this.socket.onclose = (event) => {
         warn('WebSocket relay disconnected (code', event.code, ')');
         this.connected = false;
+        // Bug 3: flip the status pill to yellow immediately instead of waiting
+        // for the periodic check to notice lastHeartbeat has aged out. The
+        // reconnect logic below will bump it back to green on success or to
+        // red once maxReconnectAttempts is exhausted.
+        try {
+          if (game.sd20?.statusIndicator?.setConnected) {
+            game.sd20.statusIndicator.setConnected('yellow');
+          }
+        } catch { /* status indicator not ready yet */ }
         // 4401: relay rejected the token; reconnect happens on next pairing.
         if (event.code === 4401) {
           this.authClosed = true;
           warn('Relay rejected token; pair again from the SD20 App.');
+          try {
+            if (game.sd20?.statusIndicator?.setConnected) {
+              game.sd20.statusIndicator.setConnected('red');
+            }
+          } catch { /* ignore */ }
           return;
         }
         this.attemptReconnect();
@@ -103,6 +120,12 @@ export class BroadcastChannelManager {
   attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       error('Max reconnect attempts reached. Please restart the relay server.');
+      // Bug 3: pill flips to red once we give up. Yellow while retrying.
+      try {
+        if (game.sd20?.statusIndicator?.setConnected) {
+          game.sd20.statusIndicator.setConnected('red');
+        }
+      } catch { /* ignore */ }
       return;
     }
 

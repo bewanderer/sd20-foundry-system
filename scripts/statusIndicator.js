@@ -11,8 +11,12 @@ let statusElement = null;
 let connectionCheckInterval = null;
 let minimizeTimeout = null;
 let lastHeartbeat = 0;
+let currentState = 'red'; // 'green' | 'yellow' | 'red'
 
-const CONNECTION_TIMEOUT = 15000;
+// Bug 3 + Optimization 5: ngrok flaps regularly on longer sessions. Raise the
+// heartbeat timeout to 30s so a brief drop does not flip the pill to red while
+// the reconnect logic is still trying.
+const CONNECTION_TIMEOUT = 30000;
 const MINIMIZE_DELAY = 5000; // Show full status for 5 seconds before minimizing
 
 /**
@@ -50,7 +54,7 @@ function registerConnectionHandlers() {
 
   bcm.on(CONFIG.MESSAGE_TYPES.APP_HANDSHAKE, () => {
     lastHeartbeat = Date.now();
-    setConnected(true);
+    setConnected('green');
   });
 
   bcm.on(CONFIG.MESSAGE_TYPES.APP_HEARTBEAT, () => {
@@ -61,7 +65,7 @@ function registerConnectionHandlers() {
   bcm.handleMessage = (message) => {
     if (message?.source === 'app') {
       lastHeartbeat = Date.now();
-      setConnected(true);
+      setConnected('green');
     }
     originalHandleMessage(message);
   };
@@ -74,8 +78,14 @@ function startConnectionCheck() {
   connectionCheckInterval = setInterval(() => {
     const timeSinceHeartbeat = Date.now() - lastHeartbeat;
 
+    // Bug 3: heartbeat aged out. If broadcastChannel is still trying to
+    // reconnect we stay yellow (already set by onclose). If the WS is
+    // considered up but no heartbeat is arriving, promote to yellow so the
+    // user sees something is off before the reconnect finishes.
     if (lastHeartbeat > 0 && timeSinceHeartbeat > CONNECTION_TIMEOUT) {
-      setConnected(false);
+      if (currentState === 'green') {
+        setConnected('yellow');
+      }
     }
   }, 5000);
 }
@@ -123,33 +133,47 @@ function minimize() {
 }
 
 /**
- * Set connection status and update UI
+ * Set connection status and update UI.
+ *
+ * Bug 3: three-state model. Accepts either the new string states
+ * ('green' | 'yellow' | 'red') or the legacy boolean (true = green, false = red).
+ * Green means fully connected with fresh heartbeat. Yellow means we know the
+ * link is impaired (WS closed and reconnecting, or heartbeat stale). Red means
+ * we have given up (max reconnects exhausted, or auth rejected).
+ *
+ * Exported so broadcastChannel.js can force the state on close and on reconnect
+ * failure without waiting for the periodic check.
  */
-function setConnected(connected) {
+export function setConnected(state) {
   if (!statusElement) return;
 
+  // Legacy boolean -> new state
+  if (state === true) state = 'green';
+  else if (state === false) state = 'red';
+  if (state !== 'green' && state !== 'yellow' && state !== 'red') return;
+
+  if (currentState === state) return;
+  const prev = currentState;
+  currentState = state;
+
   const bcm = game.sd20.broadcastChannel;
-  const wasConnected = bcm.connected;
+  if (bcm) bcm.connected = (state === 'green');
 
-  // No change, don't update UI
-  if (wasConnected === connected) return;
+  statusElement.classList.remove('connected', 'disconnected', 'sd20-status-green', 'sd20-status-yellow', 'sd20-status-red');
 
-  bcm.connected = connected;
-
-  if (connected) {
-    statusElement.classList.remove('disconnected');
-    statusElement.classList.add('connected');
+  if (state === 'green') {
+    statusElement.classList.add('connected', 'sd20-status-green');
     statusElement.innerHTML = '<i class="fas fa-link"></i><span class="status-text">SD20 App Connected</span>';
-
-    if (game.user.isGM) {
+    if (prev !== 'green' && game.user.isGM) {
       ui.notifications.info('SD20 App connected');
     }
+  } else if (state === 'yellow') {
+    statusElement.classList.add('disconnected', 'sd20-status-yellow');
+    statusElement.innerHTML = '<i class="fas fa-plug"></i><span class="status-text">SD20 App Reconnecting</span>';
   } else {
-    statusElement.classList.remove('connected');
-    statusElement.classList.add('disconnected');
+    statusElement.classList.add('disconnected', 'sd20-status-red');
     statusElement.innerHTML = '<i class="fas fa-unlink"></i><span class="status-text">SD20 App Disconnected</span>';
-
-    if (game.user.isGM) {
+    if (prev !== 'red' && game.user.isGM) {
       ui.notifications.warn('SD20 App disconnected');
     }
   }

@@ -12,6 +12,8 @@ import { setExecutionContext, clearExecutionContext } from './sd20Api.js';
 import { playMacroAnimation, isAnimationSystemAvailable, selectAnimationTarget, animationNeedsTarget, cancelActiveGridSelection } from './animationSystem.js';
 import { resetActorToBlank, resetTokenToBlank, orphanAllTokensOfActor } from './characterSync.js';
 import { postMaskedChat } from './permissions.js';
+import { normalizeMacroEntries } from './macroNormalize.js';
+import { placeAoETemplate } from './aoePlacement.js';
 
 const { DialogV2 } = foundry.applications.api;
 
@@ -865,74 +867,107 @@ export class MacroBar {
   }
 
   /**
-   * Merge combat arrays (damageTypes, statusEffects, restoration) entry-by-entry
-   * using identity matching (type/name) to preserve user edits while allowing new entries from App
-   * @param {Array} freshEntries - Fresh entries from App
-   * @param {Array} currentEntries - Current entries (may have user edits)
-   * @param {Set} editedFields - Set of edited field paths
-   * @param {string} fieldPrefix - Field prefix for checking edits (e.g., 'combat.damageTypes')
-   * @param {string} identityKey - Key to use for identity matching ('type' or 'name')
-   * @returns {Array} Merged entries
+   * Bug 4: merge combat arrays by stable per-entry id + _source tag.
+   *
+   * Rules:
+   * - Fresh App entries are matched to current entries by id when available.
+   *   Legacy entries that have no id yet fall back to type/name identity so the
+   *   first re-link after migration still lines up. macroNormalize.js will
+   *   stamp ids on them during that first successful merge.
+   * - When a current entry with _source === 'custom' matches an incoming App
+   *   entry, the custom stays. App never overwrites a player-added row.
+   * - When a current entry with _source === 'app' matches an incoming App
+   *   entry, field-level editedFields tracking runs to decide whether to
+   *   keep the current row or take the fresh one.
+   * - Current entries not present in the fresh set are kept if they are
+   *   _source === 'custom' (App did not create them) and dropped otherwise
+   *   (App removed them).
    */
   _mergeCombatArray(freshEntries, currentEntries, editedFields, fieldPrefix, identityKey = 'type') {
-    if (!freshEntries || !Array.isArray(freshEntries)) return currentEntries || [];
-    if (!currentEntries || !Array.isArray(currentEntries)) return freshEntries;
+    const fresh = Array.isArray(freshEntries) ? freshEntries : [];
+    const current = Array.isArray(currentEntries) ? currentEntries : [];
+    if (!fresh.length && !current.length) return [];
 
-    // Build map of current entries by identity key
+    // Custom entries live independently of App: they never match a fresh id
+    // (they were minted by the player). We keep them and interleave later.
+    const customCurrent = [];
+    const appCurrent = [];
+    for (const entry of current) {
+      if (!entry) continue;
+      if (entry._source === 'custom') customCurrent.push(entry);
+      else appCurrent.push(entry);
+    }
+
+    // Build lookups on the App-source current entries only.
+    const currentById = new Map();
     const currentByIdentity = new Map();
-    currentEntries.forEach((entry, index) => {
-      const key = entry[identityKey];
-      if (key) currentByIdentity.set(key, { entry, index });
+    appCurrent.forEach((entry, index) => {
+      if (entry.id) currentById.set(entry.id, { entry, index });
+      const idKey = entry[identityKey];
+      if (idKey && !currentByIdentity.has(idKey)) currentByIdentity.set(idKey, { entry, index });
     });
 
-    // Build map of fresh entries by identity key
-    const freshByIdentity = new Map();
-    freshEntries.forEach((entry, index) => {
-      const key = entry[identityKey];
-      if (key) freshByIdentity.set(key, { entry, index });
-    });
-
+    const consumedCurrentIds = new Set();
     const result = [];
 
-    // Process fresh entries - update or add
-    for (const freshEntry of freshEntries) {
-      const key = freshEntry[identityKey];
-      const current = currentByIdentity.get(key);
+    for (const freshEntry of fresh) {
+      // Match by id first, then fall back to type/name identity for legacy data.
+      let match = freshEntry.id ? currentById.get(freshEntry.id) : null;
+      if (!match) {
+        const idKey = freshEntry[identityKey];
+        if (idKey) match = currentByIdentity.get(idKey);
+      }
 
-      if (!current) {
-        // New entry from App - add it
-        result.push(freshEntry);
+      if (!match) {
+        // App added this entry. Stamp defaults so future merges are id-keyed.
+        result.push({
+          ...freshEntry,
+          id: freshEntry.id || foundry.utils.randomID(),
+          _source: 'app',
+        });
+        continue;
+      }
+
+      consumedCurrentIds.add(match.entry);
+
+      const stableKey = match.entry.id || match.entry[identityKey];
+      const entryEdited = Array.from(editedFields).some(f =>
+        f.startsWith(`${fieldPrefix}[${match.index}]`)
+        || f.startsWith(`${fieldPrefix}:${stableKey}`)
+      );
+
+      if (entryEdited) {
+        result.push({
+          ...match.entry,
+          id: match.entry.id || freshEntry.id || foundry.utils.randomID(),
+          _source: 'app',
+        });
       } else {
-        // Entry exists - check if any of its fields were edited
-        const entryEdited = Array.from(editedFields).some(f =>
-          f.startsWith(`${fieldPrefix}[${current.index}]`) ||
-          f.startsWith(`${fieldPrefix}:${key}`) // Also support identity-based field tracking
-        );
-
-        if (entryEdited) {
-          // User edited this entry - preserve their version
-          result.push(current.entry);
-        } else {
-          // Not edited - use fresh version from App
-          result.push(freshEntry);
-        }
+        result.push({
+          ...freshEntry,
+          id: match.entry.id || freshEntry.id || foundry.utils.randomID(),
+          _source: 'app',
+        });
       }
     }
 
-    // Add any user-created entries that don't exist in App data
-    for (const [key, { entry, index }] of currentByIdentity) {
-      if (!freshByIdentity.has(key)) {
-        // Check if this was a user addition (not in original app data)
-        const isUserAddition = Array.from(editedFields).some(f =>
-          f.startsWith(`${fieldPrefix}[${index}]`) ||
-          f.startsWith(`${fieldPrefix}:${key}`)
-        );
-        if (isUserAddition) {
-          result.push(entry);
-        }
-        // If not user addition, it was removed from App - don't include it
-      }
-    }
+    // App-source current entries that no incoming fresh entry claimed: App
+    // deleted them. Drop unless the player explicitly tracked the field
+    // (they added it via the builder, which then flagged editedFields).
+    // Iterate the source array directly so legacy entries with only an
+    // identity key (no id yet) are considered too. Bug 4 (Batch C test).
+    appCurrent.forEach((entry, index) => {
+      if (consumedCurrentIds.has(entry)) return;
+      const stableKey = entry.id || entry[identityKey];
+      const userAdded = Array.from(editedFields).some(f =>
+        f.startsWith(`${fieldPrefix}[${index}]`)
+        || (stableKey && f.startsWith(`${fieldPrefix}:${stableKey}`))
+      );
+      if (userAdded) result.push(entry);
+    });
+
+    // Custom entries always survive - App has no authority over them.
+    for (const entry of customCurrent) result.push(entry);
 
     return result;
   }
@@ -1275,14 +1310,36 @@ export class MacroBar {
       ? '<div class="read-only-badge" title="You do not own this Actor"><i class="fa-solid fa-lock"></i></div>'
       : '';
 
+    // Optimization 8: sync indicator. States: 'idle' (no badge), 'syncing'
+    // (spinner during a Refresh-from-App), 'offline' (App unreachable after
+    // last try). Owned by this instance's _syncState field.
+    let syncBadge = '';
+    if (this._syncState === 'syncing') {
+      syncBadge = '<div class="macro-sync-badge macro-sync-syncing" title="Syncing from SD20 App"><i class="fa-solid fa-arrows-rotate fa-spin"></i></div>';
+    } else if (this._syncState === 'offline') {
+      syncBadge = '<div class="macro-sync-badge macro-sync-offline" title="SD20 App offline - using cached data"><i class="fa-solid fa-triangle-exclamation"></i></div>';
+    }
+
     return `
       <div class="sd20-macro-bar" data-character-uuid="${this.characterUUID || ''}">
         ${readOnlyBadge}
+        ${syncBadge}
         <div class="macro-set-tabs">${tabsHTML}</div>
         <div class="macro-category-bar">${categoriesHTML}</div>
         ${controlsHTML}
       </div>
     `;
+  }
+
+  /**
+   * Optimization 8: transition the sync-indicator badge. Called by the
+   * Refresh-from-App flow around the App round trip.
+   * @param {'idle'|'syncing'|'offline'} state
+   */
+  setSyncState(state) {
+    if (this._syncState === state) return;
+    this._syncState = state;
+    if (this.element) this.render();
   }
 
   /**
@@ -2552,9 +2609,18 @@ export class MacroBar {
           ui.notifications.warn('SD20 App is not connected. Start the App and relay server to sync.');
           return;
         }
-        // Refresh macros - force fetch from App, preserving user edits (modified macros)
-        await this.refreshMacros(false, true);
-        ui.notifications.info('Macros refreshed from SD20 App (user edits preserved)');
+        // Optimization 8: surface the round-trip in the header badge so the
+        // player knows why the bar is temporarily unresponsive.
+        this.setSyncState('syncing');
+        try {
+          await this.refreshMacros(false, true);
+          this.setSyncState('idle');
+          ui.notifications.info('Macros refreshed from SD20 App (user edits preserved)');
+        } catch (err) {
+          this.setSyncState('offline');
+          debug('refreshMacros failed during manual refresh:', err);
+          ui.notifications.warn('Refresh failed - App may be offline. Showing cached macros.');
+        }
         break;
       }
       case 'regenerate': {
@@ -2718,22 +2784,13 @@ export class MacroBar {
 
       // Save the empty state
       await this.saveMacroSets();
-    } else {
-      // Actor-only unlink: keep macros but remove App source flags
-      // This allows macros to continue working without App connection
-      const activeSetData = this.macroSets[this.activeSet];
-      if (activeSetData?.macros) {
-        activeSetData.macros = activeSetData.macros.map(m => {
-          if (!m) return m;
-          // Convert App macros to custom so they persist without App
-          if (m.source === CONFIG.MACRO_SOURCES.APP) {
-            return { ...m, source: CONFIG.MACRO_SOURCES.CUSTOM };
-          }
-          return m;
-        });
-        await this.saveMacroSets();
-      }
     }
+    // Actor-only unlink no longer touches macro sources. Bug 4: the App-source
+    // tag is what lets a future re-link line up incoming App data with the
+    // existing rows. Flipping every macro to custom used to drop those tags
+    // and cause player-edited copies of App macros to be filtered out on
+    // re-link. Macros keep working offline because the stored data itself is
+    // local; they do not require an active App connection to execute.
 
     // Re-render AFTER all state changes are complete
     this.render();
@@ -3438,7 +3495,10 @@ export class MacroBar {
 
     // Dice
     const count = parseInt(component.diceCount) || 0;
-    const sides = parseInt(component.diceSides) || 6;
+    // Bug 7: || falls through on parseInt(0). Preserve intentional zeros so
+    // players can configure zero-sided dice deliberately.
+    const parsedSides = parseInt(component.diceSides);
+    const sides = Number.isFinite(parsedSides) ? parsedSides : 6;
     if (count > 0) {
       parts.push(`${count}d${sides}`);
     }
@@ -3507,6 +3567,11 @@ export class MacroBar {
     result.roll = roll;
     result.total = roll.total;
     result.rollHTML = await roll.render();
+    // Bug 11: capture the per-die HTML as a plain string so it survives the
+    // deepClone that happens when the deferred chat is rebuilt after the GM
+    // rules on components. Without this, the after-ruling chat drops back to
+    // formula + total only and hides per-die values.
+    result.diceBreakdown = renderDiceBreakdown(roll);
 
     return result;
   }
@@ -3579,9 +3644,13 @@ export class MacroBar {
   async _createAOETemplate(macro, token) {
     const shapeMap = {
       circle: 'circle',
+      // Bug 10: hex stays in code for backward compatibility with existing
+      // hex-shape macros in the wild. New macros pick from the UI-visible
+      // options only.
       hex: 'circle',
       cone: 'cone',
-      line: 'ray'
+      line: 'ray',
+      square: 'rect'
     };
     const t = shapeMap[macro.aoe?.shape];
     if (!t) return null;
@@ -3650,365 +3719,31 @@ export class MacroBar {
 
     if (t === 'cone') templateData.angle = macro.aoe.coneAngle || 90;
     if (t === 'ray') templateData.width = macro.aoe.lineWidth || canvas.grid.distance;
+    // Batch D: rect is now center-anchored via the new aoePlacement widget.
+    // Distance is the half-extent from center in feet; width equals distance
+    // so Foundry's built-in outline still renders roughly the right shape,
+    // but the cell coverage math (aoeGridHighlight._getSquareCells) is what
+    // actually determines targeting.
+    if (t === 'rect') templateData.width = templateData.distance;
 
-    // Hide template from players when visibility is 'hidden' or 'reactiveReveal'.
-    // For reactiveReveal, the ruling panel surfaces a "Reveal AoE" action that
-    // flips hidden back to false once the GM is ready to show the players.
     if (playerVisibility === 'hidden' || playerVisibility === 'reactiveReveal') {
       templateData.hidden = true;
     }
 
     const scaleOpts = canScale ? { minSize, maxSize, step: canvas.grid.distance || 5 } : null;
 
+    // Batch D: unified placement widget for every shape.
+    // - originateSelf pins the origin at the caster (fixedOrigin option).
+    // - Others start by asking the GM to click an origin.
     if (originateSelf) {
-      templateData.x = token.center.x;
-      templateData.y = token.center.y;
-      if (!requiresRotation && !canScale) {
-        // Circle/hex from self, fixed size: place immediately
-        const [created] = await canvas.scene.createEmbeddedDocuments('MeasuredTemplate', [templateData]);
-        ui.notifications.info(`AOE placed at ${token.name}'s position`);
-        return created || null;
-      } else {
-        // Needs rotation and/or scaling
-        return await this._aoeRotateAndConfirm(templateData, scaleOpts);
-      }
-    } else {
-      return await this._aoeClickToPlace(templateData, requiresRotation, scaleOpts);
+      return await placeAoETemplate(templateData, {
+        scaleOpts,
+        fixedOrigin: { x: token.center.x, y: token.center.y },
+      });
     }
+    return await placeAoETemplate(templateData, { scaleOpts });
   }
 
-  /**
-   * Interactive: rotate/scale from fixed origin, click to confirm, right-click/Esc cancels
-   * @param {Object|null} scaleOpts - { minSize, maxSize, step } or null if fixed size
-   */
-  _aoeRotateAndConfirm(templateData, scaleOpts) {
-    return new Promise((resolve) => {
-      const doc = new MeasuredTemplateDocument(templateData, { parent: canvas.scene });
-      const TemplateClass = foundry.canvas?.placeables?.MeasuredTemplate ?? MeasuredTemplate;
-      const preview = new TemplateClass(doc);
-      canvas.templates.addChild(preview);
-      preview.draw();
-
-      // Floating size label
-      const sizeLabel = new PIXI.Text('', {
-        fontFamily: 'Signika', fontSize: 60, fontWeight: 'bold',
-        fill: '#ffffff', stroke: '#000000', strokeThickness: 6
-      });
-      sizeLabel.anchor.set(0, 0.5);
-      canvas.stage.addChild(sizeLabel);
-
-      const updateSizeLabel = (pos) => {
-        sizeLabel.text = `${templateData.distance} ft`;
-        sizeLabel.position.set(pos.x + 12, pos.y);
-      };
-
-      const refreshPreview = () => {
-        if (preview.renderFlags) preview.renderFlags.set({ refreshShape: true });
-        preview.refresh();
-      };
-
-      const origCursor = canvas.app.view.style.cursor;
-      canvas.app.view.style.cursor = 'crosshair';
-
-      // Disable token interaction during AoE placement to prevent accidental selection
-      const tokenEventModes = new Map();
-      for (const token of canvas.tokens.placeables) {
-        tokenEventModes.set(token.id, token.eventMode);
-        token.eventMode = 'none';
-      }
-
-      const hints = ['Left-click to confirm, right-click to cancel'];
-      if (scaleOpts) hints.push('Move cursor closer/further to resize, or scroll');
-      ui.notifications.info(hints.join('. '));
-
-      const onMouseMove = (event) => {
-        const pos = canvas.canvasCoordinatesFromClient({ x: event.clientX, y: event.clientY });
-        const dx = pos.x - templateData.x;
-        const dy = pos.y - templateData.y;
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        const updates = { direction: angle };
-
-        // Scale AOE size based on cursor distance from origin
-        if (scaleOpts) {
-          const cursorDist = Math.sqrt(dx * dx + dy * dy);
-          const gridPx = canvas.grid.size || 100;
-          const gridDist = canvas.grid.distance || 5;
-          const distInFt = (cursorDist / gridPx) * gridDist;
-          const snapped = Math.round(distInFt / scaleOpts.step) * scaleOpts.step;
-          const clamped = Math.max(scaleOpts.minSize, Math.min(scaleOpts.maxSize, snapped));
-          if (clamped !== templateData.distance) {
-            templateData.distance = clamped;
-            updates.distance = clamped;
-          }
-        }
-
-        preview.document.updateSource(updates);
-        refreshPreview();
-        updateSizeLabel(pos);
-      };
-
-      const onWheel = (event) => {
-        if (!scaleOpts) return;
-        event.preventDefault();
-        const dir = event.deltaY < 0 ? 1 : -1;
-        const current = templateData.distance;
-        const next = Math.max(scaleOpts.minSize, Math.min(scaleOpts.maxSize, current + dir * scaleOpts.step));
-        if (next !== current) {
-          templateData.distance = next;
-          preview.document.updateSource({ distance: next });
-          refreshPreview();
-          sizeLabel.text = `${next} ft`;
-        }
-      };
-
-      const cleanup = () => {
-        canvas.app.view.removeEventListener('mousemove', onMouseMove);
-        canvas.app.view.removeEventListener('mousedown', onMouseDown);
-        document.removeEventListener('wheel', onWheel, { capture: true });
-        document.removeEventListener('keydown', onKeyDown);
-        canvas.templates.removeChild(preview);
-        preview.destroy({ children: true });
-        canvas.stage.removeChild(sizeLabel);
-        sizeLabel.destroy();
-        canvas.app.view.style.cursor = origCursor;
-
-        // Restore token interactivity
-        for (const token of canvas.tokens.placeables) {
-          const origMode = tokenEventModes.get(token.id);
-          if (origMode !== undefined) {
-            token.eventMode = origMode;
-          }
-        }
-      };
-
-      const onMouseDown = async (event) => {
-        if (event.button === 0) {
-          templateData.direction = preview.document.direction;
-          cleanup();
-          const [created] = await canvas.scene.createEmbeddedDocuments('MeasuredTemplate', [templateData]);
-          ui.notifications.info('AOE template placed');
-          resolve(created || null);
-        } else if (event.button === 2) {
-          cleanup();
-          ui.notifications.warn('AOE placement cancelled');
-          resolve(null);
-        }
-      };
-
-      const onKeyDown = (event) => {
-        if (event.key === 'Escape') {
-          cleanup();
-          ui.notifications.warn('AOE placement cancelled');
-          resolve(null);
-        }
-      };
-
-      canvas.app.view.addEventListener('mousemove', onMouseMove);
-      canvas.app.view.addEventListener('mousedown', onMouseDown);
-      document.addEventListener('wheel', onWheel, { passive: false, capture: true });
-      document.addEventListener('keydown', onKeyDown);
-    });
-  }
-
-  /**
-   * Interactive: click to pick origin, then (for cone/line) rotate and click to confirm
-   * Supports scroll-to-resize when scaleOpts provided
-   * @param {Object|null} scaleOpts - { minSize, maxSize, step } or null if fixed size
-   */
-  _aoeClickToPlace(templateData, requiresRotation, scaleOpts) {
-    return new Promise((resolve) => {
-      let preview = null;
-      let originSet = false;
-      const TemplateClass = foundry.canvas?.placeables?.MeasuredTemplate ?? MeasuredTemplate;
-
-      // Floating size label
-      const sizeLabel = new PIXI.Text('', {
-        fontFamily: 'Signika', fontSize: 60, fontWeight: 'bold',
-        fill: '#ffffff', stroke: '#000000', strokeThickness: 6
-      });
-      sizeLabel.anchor.set(0, 0.5);
-      canvas.stage.addChild(sizeLabel);
-
-      const updateSizeLabel = (pos) => {
-        sizeLabel.text = `${templateData.distance} ft`;
-        sizeLabel.position.set(pos.x + 12, pos.y);
-      };
-
-      const refreshPreview = () => {
-        if (!preview) return;
-        if (preview.renderFlags) preview.renderFlags.set({ refreshShape: true });
-        preview.refresh();
-      };
-
-      const origCursor = canvas.app.view.style.cursor;
-      canvas.app.view.style.cursor = 'crosshair';
-
-      // Disable token interaction during AoE placement to prevent accidental selection
-      const tokenEventModes = new Map();
-      for (const token of canvas.tokens.placeables) {
-        tokenEventModes.set(token.id, token.eventMode);
-        token.eventMode = 'none';
-      }
-
-      const hints = ['Click to place AOE origin'];
-      if (scaleOpts) hints.push('Scroll or move cursor to resize');
-      ui.notifications.info(hints.join('. '));
-
-      const createPreview = (x, y) => {
-        if (preview) {
-          canvas.templates.removeChild(preview);
-          preview.destroy({ children: true });
-        }
-        templateData.x = x;
-        templateData.y = y;
-        const doc = new MeasuredTemplateDocument(templateData, { parent: canvas.scene });
-        preview = new TemplateClass(doc);
-        canvas.templates.addChild(preview);
-        preview.draw();
-      };
-
-      // Helper to snap a canvas position to the center of its grid cell
-      const snapToGridCenter = (x, y) => {
-        const cell = canvas.grid.getOffset({ x, y });
-        return canvas.grid.getCenterPoint({ i: cell.i, j: cell.j });
-      };
-
-      const onMouseMove = (event) => {
-        const rawPos = canvas.canvasCoordinatesFromClient({ x: event.clientX, y: event.clientY });
-        if (!originSet) {
-          // Snap preview to grid center
-          const snapped = snapToGridCenter(rawPos.x, rawPos.y);
-          createPreview(snapped.x, snapped.y);
-          updateSizeLabel(rawPos);
-        } else if (preview) {
-          const dx = rawPos.x - templateData.x;
-          const dy = rawPos.y - templateData.y;
-
-          if (requiresRotation) {
-            // Cone/line: rotation + optional scaling via updateSource
-            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            const updates = { direction: angle };
-
-            if (scaleOpts) {
-              const cursorDist = Math.sqrt(dx * dx + dy * dy);
-              const gridPx = canvas.grid.size || 100;
-              const gridDist = canvas.grid.distance || 5;
-              const distInFt = (cursorDist / gridPx) * gridDist;
-              const snappedSize = Math.round(distInFt / scaleOpts.step) * scaleOpts.step;
-              const clamped = Math.max(scaleOpts.minSize, Math.min(scaleOpts.maxSize, snappedSize));
-              templateData.distance = clamped;
-              updates.distance = clamped;
-            }
-
-            preview.document.updateSource(updates);
-            refreshPreview();
-          } else if (scaleOpts) {
-            // Circle/hex: cursor-distance scaling — rebuild preview since updateSource
-            // doesn't visually refresh circle templates in V13
-            const cursorDist = Math.sqrt(dx * dx + dy * dy);
-            const gridPx = canvas.grid.size || 100;
-            const gridDist = canvas.grid.distance || 5;
-            const distInFt = (cursorDist / gridPx) * gridDist;
-            const snappedSize = Math.round(distInFt / scaleOpts.step) * scaleOpts.step;
-            const clamped = Math.max(scaleOpts.minSize, Math.min(scaleOpts.maxSize, snappedSize));
-            templateData.distance = clamped;
-            createPreview(templateData.x, templateData.y);
-          }
-          updateSizeLabel(rawPos);
-        }
-      };
-
-      const onWheel = (event) => {
-        if (!scaleOpts) return;
-        event.preventDefault();
-        const dir = event.deltaY < 0 ? 1 : -1;
-        const current = templateData.distance;
-        const next = Math.max(scaleOpts.minSize, Math.min(scaleOpts.maxSize, current + dir * scaleOpts.step));
-        if (next !== current) {
-          templateData.distance = next;
-          if (!requiresRotation && preview) {
-            // Circle/hex: rebuild preview to show new size (updateSource doesn't visually refresh circles)
-            createPreview(templateData.x, templateData.y);
-          } else if (preview) {
-            preview.document.updateSource({ distance: next });
-            refreshPreview();
-          }
-          sizeLabel.text = `${next} ft`;
-        }
-      };
-
-      const cleanup = () => {
-        canvas.app.view.removeEventListener('mousemove', onMouseMove);
-        canvas.app.view.removeEventListener('mousedown', onMouseDown);
-        document.removeEventListener('wheel', onWheel, { capture: true });
-        document.removeEventListener('keydown', onKeyDown);
-        if (preview) {
-          canvas.templates.removeChild(preview);
-          preview.destroy({ children: true });
-          preview = null;
-        }
-        canvas.stage.removeChild(sizeLabel);
-        sizeLabel.destroy();
-        canvas.app.view.style.cursor = origCursor;
-
-        // Restore token interactivity
-        for (const token of canvas.tokens.placeables) {
-          const origMode = tokenEventModes.get(token.id);
-          if (origMode !== undefined) {
-            token.eventMode = origMode;
-          }
-        }
-      };
-
-      const onMouseDown = async (event) => {
-        if (event.button === 2) {
-          cleanup();
-          ui.notifications.warn('AOE placement cancelled');
-          resolve(null);
-          return;
-        }
-        if (event.button !== 0) return;
-
-        if (!originSet) {
-          originSet = true;
-          if (!requiresRotation && !scaleOpts) {
-            // Circle/hex, fixed size: confirm immediately
-            cleanup();
-            const [created1] = await canvas.scene.createEmbeddedDocuments('MeasuredTemplate', [templateData]);
-            ui.notifications.info('AOE template placed');
-            resolve(created1 || null);
-          } else {
-            // Needs rotation and/or scaling — wait for second click
-            createPreview(templateData.x, templateData.y);
-            const msg = requiresRotation ? 'Move to aim' : 'Move to resize';
-            if (scaleOpts) ui.notifications.info(`${msg}, left-click to confirm. Scroll to resize.`);
-            else ui.notifications.info(`${msg}, left-click to confirm`);
-          }
-        } else {
-          if (preview) {
-            templateData.direction = preview.document.direction;
-          }
-          cleanup();
-          const [created2] = await canvas.scene.createEmbeddedDocuments('MeasuredTemplate', [templateData]);
-          ui.notifications.info('AOE template placed');
-          resolve(created2 || null);
-        }
-      };
-
-      const onKeyDown = (event) => {
-        if (event.key === 'Escape') {
-          cleanup();
-          ui.notifications.warn('AOE placement cancelled');
-          resolve(null);
-        }
-      };
-
-      canvas.app.view.addEventListener('mousemove', onMouseMove);
-      canvas.app.view.addEventListener('mousedown', onMouseDown);
-      document.addEventListener('wheel', onWheel, { passive: false, capture: true });
-      document.addEventListener('keydown', onKeyDown);
-    });
-  }
 
   /**
    * Execute a macro's custom JavaScript
@@ -4297,6 +4032,11 @@ export class MacroBar {
     if (!setData.macros) {
       setData.macros = [];
     }
+
+    // Bug 4: stamp per-entry id + _source before storing so re-link and
+    // subsequent App deltas can line up rows correctly.
+    const defaultSource = macro?.source === CONFIG.MACRO_SOURCES.APP ? 'app' : 'custom';
+    normalizeMacroEntries(macro, defaultSource);
 
     if (slot !== null && slot !== undefined) {
       // Ensure array is long enough

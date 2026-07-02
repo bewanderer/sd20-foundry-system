@@ -51,5 +51,27 @@ export function postMaskedChat(actor, buildContent, options = {}) {
     }
   }
 
-  return ChatMessage.create({ content, speaker });
+  const messageData = { content, speaker };
+
+  // Bug 15: whisper mode for monster recovery chat. Only GMs and the actor's
+  // owners see the message. Other players see nothing at all. Passed by
+  // combatTracker.applyPassiveRegeneration; other callers stay public-masked.
+  if (options.whisperToOwner) {
+    const recipients = new Set();
+    for (const user of game.users) {
+      if (user.isGM) {
+        recipients.add(user.id);
+        continue;
+      }
+      try {
+        if (actor.testUserPermission(user, 'OWNER')) {
+          recipients.add(user.id);
+        }
+      } catch { /* skip */ }
+    }
+    messageData.whisper = Array.from(recipients);
+    messageData.rollMode = 'gmroll';
+  }
+
+  return ChatMessage.create(messageData);
 }

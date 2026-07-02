@@ -220,6 +220,30 @@ body.game .app select:focus {
   border-color: transparent;
 }
 
+/* Bug 3: three-state pill. Green means live, yellow means reconnecting
+   after a WS close, red means max retries exhausted or auth rejected. */
+.souls-d20-status.sd20-status-green {
+  border-color: var(--sd20-green);
+  color: var(--sd20-green);
+}
+.souls-d20-status.sd20-status-green.minimized {
+  border-color: transparent;
+}
+.souls-d20-status.sd20-status-yellow {
+  border-color: #d9a441;
+  color: #d9a441;
+}
+.souls-d20-status.sd20-status-yellow.minimized {
+  border-color: transparent;
+}
+.souls-d20-status.sd20-status-red {
+  border-color: var(--sd20-red);
+  color: var(--sd20-red);
+}
+.souls-d20-status.sd20-status-red.minimized {
+  border-color: transparent;
+}
+
 /* ========================================
    Token Config Tab Styles
    ======================================== */
@@ -1661,6 +1685,10 @@ body.game .app select:focus {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  /* Bug 11: high dice counts (e.g. 10d10) used to overflow the chat card
+     horizontally. Allow wrapping so the breakdown stays inside the card. */
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .sd20-macro-card .macro-card-roll > .damage-total {
@@ -1691,6 +1719,8 @@ body.game .app select:focus {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .sd20-macro-card .check-total {
@@ -6502,6 +6532,55 @@ body.game .sd20-macro-library input[type="text"] {
 
 .ruling-btn-deny:hover {
   background: var(--sd20-red-20);
+}
+
+/* Bug 12: roll-only button. Purple tint to keep it distinct from Approve
+   (green) and Deny (red) at a glance. */
+.ruling-btn-roll-only {
+  background: rgba(150, 100, 200, 0.15);
+  color: #c890f0;
+  border-color: rgba(200, 150, 240, 0.4);
+}
+
+.ruling-btn-roll-only:hover {
+  background: rgba(150, 100, 200, 0.3);
+}
+
+.roll-only-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c890f0;
+  background: rgba(150, 100, 200, 0.18);
+  border: 1px solid rgba(200, 150, 240, 0.4);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+/* Optimization 8: macro bar sync-indicator badge. */
+.sd20-macro-bar .macro-sync-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: 2.5rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  pointer-events: none;
+  z-index: 5;
+}
+.sd20-macro-bar .macro-sync-syncing {
+  background: rgba(46, 121, 226, 0.85);
+  color: #ffffff;
+}
+.sd20-macro-bar .macro-sync-offline {
+  background: rgba(200, 120, 40, 0.85);
+  color: #ffffff;
 }
 
 .ruling-btn-auto {

@@ -240,7 +240,14 @@ function convertDiceToCombat(dice, linkedSlot = null, scalingBonus = 0, sourceTy
   for (const d of dice) {
     const type = (d.type || 'PHYSICAL').toUpperCase();
     const diceCount = parseInt(d.count) || 0;
-    const diceSides = parseInt(d.value) || parseInt(d.sides) || 6;
+    // Bug 7: || would fall through when parseInt returns 0. Players are allowed
+    // to configure 0d0, 0dX, or Xd0 rolls (flat-only, no dice, or explicit
+    // zero-sided). Treat 0 as intentional.
+    const parsedVal = parseInt(d.value);
+    const parsedSides = parseInt(d.sides);
+    const diceSides = Number.isFinite(parsedVal)
+      ? parsedVal
+      : (Number.isFinite(parsedSides) ? parsedSides : 6);
 
     if (DAMAGE_TYPE_SET.has(type)) {
       // This is a damage type - add to damageTypes
@@ -304,11 +311,127 @@ function convertDiceToCombat(dice, linkedSlot = null, scalingBonus = 0, sourceTy
  * Macro Manager class
  * Fetches combat data from SD20 App and generates/caches macros
  */
+// Item 4 (Batch C): dependency map from App-side field paths to Foundry macro
+// categories. Used by invalidateCache to decide whether the whole cache entry
+// gets dropped or only certain categories are marked for regeneration.
+//
+// Category values match CONFIG.MACRO_CATEGORIES ids (mainHand, offHand, spells,
+// spirits, skills, initiative, skillChecks, knowledgeChecks, statChecks).
+// Categories with the '*' suffix mean "all subcategories."
+export const DELTA_REGEN_MAP = Object.freeze({
+  'stats.*': ['mainHand', 'offHand', 'skillChecks', 'knowledgeChecks', 'statChecks'],
+  'mainHand': ['mainHand', 'sorcery', 'hex', 'miracle', 'pyromancy'],
+  'offHand': ['offHand', 'sorcery', 'hex', 'miracle', 'pyromancy'],
+  'equipment.MainHand': ['mainHand', 'sorcery', 'hex', 'miracle', 'pyromancy'],
+  'equipment.OffHand': ['offHand', 'sorcery', 'hex', 'miracle', 'pyromancy'],
+  'weapon_modifications': ['mainHand', 'offHand'],
+  'attuned_spells': ['sorcery', 'hex', 'miracle', 'pyromancy'],
+  'attuned_spirits': ['spirits'],
+  'attuned_weapon_skills': ['skills'],
+  'combat_settings.twoHandingMainHand': ['mainHand'],
+  'combat_settings.twoHandingOffHand': ['offHand'],
+  'skills.*': ['skillChecks'],
+  'knowledge.*': ['knowledgeChecks'],
+  'level': [],
+  'bonus_resistances': [],
+  'bonus_statuses': [],
+  'bonus_resistances_active': [],
+});
+
+const ALL_MACRO_CATEGORIES = new Set([
+  'mainHand', 'offHand', 'sorcery', 'hex', 'miracle', 'pyromancy',
+  'spirits', 'skills', 'abilities', 'initiative',
+  'skillChecks', 'knowledgeChecks', 'statChecks', 'custom',
+]);
+
+function _resolveAffectedCategories(changedFields) {
+  const affected = new Set();
+  for (const field of (changedFields || [])) {
+    // Exact match first.
+    if (DELTA_REGEN_MAP[field]) {
+      for (const cat of DELTA_REGEN_MAP[field]) affected.add(cat);
+      continue;
+    }
+    // Root path with wildcard (stats.* covers stats.strength etc.)
+    const root = field.split('.')[0];
+    const wildcard = `${root}.*`;
+    if (DELTA_REGEN_MAP[wildcard]) {
+      for (const cat of DELTA_REGEN_MAP[wildcard]) affected.add(cat);
+      continue;
+    }
+    // Not in map: caller treats this as "unknown field, safest to full-drop."
+    return null;
+  }
+  return affected;
+}
+
+/**
+ * Item 4 (Batch C): merge an incoming delta into the cached combatData so a
+ * subsequent regeneration produces correct macros without another WS round
+ * trip. Called by handleCharacterDelta after invalidateCache is scheduled.
+ */
+export function mergeDeltaIntoCache(uuid, delta) {
+  const mgr = game.sd20?.macroManager;
+  if (!mgr) return;
+  const cached = mgr.macroCache?.get(uuid);
+  if (!cached || !cached.combatData) return;
+  for (const [key, value] of Object.entries(delta || {})) {
+    if (key.includes('.')) {
+      foundry.utils.setProperty(cached.combatData, key, value);
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      cached.combatData[key] = foundry.utils.mergeObject(
+        cached.combatData[key] ?? {},
+        value,
+        { inplace: false }
+      );
+    } else {
+      cached.combatData[key] = value;
+    }
+  }
+}
+
 export class MacroManager {
   constructor() {
-    this.macroCache = new Map(); // uuid -> { macros: [], lastUpdate: timestamp }
+    // uuid -> { macros, combatData, needsRegeneration, staleCategories, lastUpdate }
+    this.macroCache = new Map();
     this.pendingRequests = new Map(); // uuid -> Promise
-    this.requestTimeout = 30000; // 30s. Tight enough to fail fast on App-offline, generous enough for ngrok latency.
+    this.requestTimeout = 30000;
+  }
+
+  /**
+   * Item 4 (Batch C): granular invalidation.
+   * - No changedFields: drop the whole cache entry. Next getMacros re-requests
+   *   combat data via WS. Used by _processCharacterUpdate where we do not know
+   *   which fields moved.
+   * - With changedFields: consult DELTA_REGEN_MAP. If every field maps to a
+   *   known category set, mark those categories stale. If any field is not in
+   *   the map, fall through to full drop for safety.
+   */
+  invalidateCache(uuid, changedFields = null) {
+    if (!uuid) return;
+    if (!changedFields || changedFields.length === 0) {
+      if (this.macroCache.delete(uuid)) {
+        debug(`Item 4: dropped whole macro cache entry for ${uuid}`);
+      }
+      return;
+    }
+    const affected = _resolveAffectedCategories(changedFields);
+    if (affected === null) {
+      if (this.macroCache.delete(uuid)) {
+        debug(`Item 4: unknown field in delta, dropped cache for ${uuid}`);
+      }
+      return;
+    }
+    if (affected.size === 0) {
+      debug(`Item 4: delta touched only non-macro fields (${changedFields.join(', ')}), cache intact`);
+      return;
+    }
+    const cached = this.macroCache.get(uuid);
+    if (!cached) return;
+    cached.needsRegeneration = true;
+    cached.staleCategories = cached.staleCategories || new Set();
+    for (const cat of affected) cached.staleCategories.add(cat);
+    debug(`Item 4: marked stale categories for ${uuid}: ${Array.from(cached.staleCategories).join(', ')}`);
   }
 
   /**
@@ -379,42 +502,45 @@ export class MacroManager {
   async getMacros(uuid, forceRefresh = false, actor = null) {
     if (!uuid) return [];
 
-    // Check cache
     const cached = this.macroCache.get(uuid);
-    if (cached && !forceRefresh) {
-      const age = Date.now() - cached.lastUpdate;
-      // Use cache if less than 30 seconds old (fast path)
-      if (age < 30000) {
-        debug(`Using cached macros for ${uuid} (age: ${Math.round(age / 1000)}s)`);
-        return cached.macros;
-      }
 
-      // Stale cache: return cached data immediately, refresh in background
-      // This prevents 5-second waits when switching tokens
-      debug(`Using stale cached macros for ${uuid} (age: ${Math.round(age / 1000)}s), refreshing in background`);
-      this._refreshInBackground(uuid, actor);
+    // Item 3 (Batch C): invalidation-driven cache. Cache is fresh unless a
+    // CHARACTER_UPDATE dropped it or a CHARACTER_DELTA_UPDATE marked it as
+    // needsRegeneration. The 30s TTL + background-refresh dance is gone.
+    if (cached && !forceRefresh && !cached.needsRegeneration) {
+      debug(`Item 3: cache hit for ${uuid}, returning cached macros`);
       return cached.macros;
     }
 
-    // No cache or forced refresh - must wait for fetch
-    // Pass actorId to scope the response to this specific actor
+    // Item 4 (Batch C): partial regeneration path. When we know combatData is
+    // current (delta merged it in) but macros are stale, regenerate locally
+    // without a WS round trip. This is the Bug 6 fast path.
+    if (cached && !forceRefresh && cached.needsRegeneration && cached.combatData) {
+      debug(`Item 4: regenerating macros for ${uuid} from cached combatData (no WS round trip)`);
+      const macros = this.generateMacros(cached.combatData, actor);
+      cached.macros = macros;
+      cached.needsRegeneration = false;
+      cached.staleCategories = new Set();
+      cached.lastUpdate = Date.now();
+      return macros;
+    }
+
+    // No cache OR forceRefresh: WS round trip to get fresh combat data.
     const combatData = await this.requestCombatData(uuid, actor?.id || null);
     if (!combatData) {
-      // Return cached if available, empty array otherwise
       return cached?.macros || [];
     }
 
-    // Generate macros from combat data and actor system data
     const macros = this.generateMacros(combatData, actor);
 
-    // Cache the result
     this.macroCache.set(uuid, {
       macros,
+      combatData,
+      needsRegeneration: false,
+      staleCategories: new Set(),
       lastUpdate: Date.now(),
-      combatData
     });
 
-    // Sync resistance and threshold data to actor flags for the calculation engine
     if (actor) {
       syncCombatDataToActor(actor, combatData).catch(err => {
         debug('Failed to sync combat data to actor flags:', err);
@@ -422,35 +548,6 @@ export class MacroManager {
     }
 
     return macros;
-  }
-
-  /**
-   * Refresh macro cache in background without blocking
-   * @private
-   */
-  async _refreshInBackground(uuid, actor) {
-    try {
-      // Pass actorId to scope the response to this specific actor
-      const combatData = await this.requestCombatData(uuid, actor?.id || null);
-      if (!combatData) return;
-
-      const macros = this.generateMacros(combatData, actor);
-      this.macroCache.set(uuid, {
-        macros,
-        lastUpdate: Date.now(),
-        combatData
-      });
-
-      if (actor) {
-        syncCombatDataToActor(actor, combatData).catch(err => {
-          debug('Failed to sync combat data to actor flags:', err);
-        });
-      }
-
-      debug(`Background refresh complete for ${uuid}`);
-    } catch (err) {
-      debug(`Background refresh failed for ${uuid}:`, err);
-    }
   }
 
   /**

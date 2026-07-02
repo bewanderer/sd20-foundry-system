@@ -6,6 +6,9 @@
 
 import { CONFIG } from './config.js';
 import { debug, log } from './utils.js';
+// Bug 11: threatSystem does not consume dice info directly, but it does
+// preserve the diceBreakdown string emitted by _rollCombatComponent through
+// the deferred chat rebuild. No renderer needed here - the string is opaque.
 import {
   calculateDamage, calculateStatusBuildup, calculateRestoration,
   rollStatusConditionDC, applyDamageToActor, applyBuildupToActor,
@@ -762,6 +765,13 @@ export async function resolveComponent(eventId, componentId, ruling) {
     debug(`Component execution complete`);
   } else if (ruling === CONFIG.RULING_STATES.DENIED) {
     comp.result = { denied: true };
+  } else if (ruling === CONFIG.RULING_STATES.ROLL_ONLY) {
+    // Bug 12: run the calc so the table sees the dice/final total, but skip
+    // every apply* + commitActorUpdates path so the target actor is not
+    // mutated. The component still shows up in the deferred chat because
+    // _rebuildChatWithApprovedComponents treats ROLL_ONLY like APPROVED.
+    debug(`Executing roll-only component...`);
+    _executeComponentRollOnly(comp, defenderActor, currentRound);
   } else if (ruling === CONFIG.RULING_STATES.AUTO_SUCCEED) {
     // For conditions: defender auto-passes, condition NOT applied
     comp.result = { autoSucceed: true, message: `${comp.condition} resisted (GM ruling)` };
@@ -832,9 +842,79 @@ export async function resolveAllComponents(eventId, ruling) {
   if (!event) return;
 
   for (const comp of event.components) {
-    // Only resolve pending components - already resolved ones are skipped
-    if (comp.ruling === CONFIG.RULING_STATES.PENDING) {
-      await resolveComponent(eventId, comp.id, ruling);
+    if (comp.ruling !== CONFIG.RULING_STATES.PENDING) continue;
+    // Batch D: bulk Roll All never applies to the aoe-reveal component.
+    // Reveal is not a rollable effect - it should follow the caster's original
+    // playerVisibility setting, so bulk-roll auto-approves it.
+    if (ruling === CONFIG.RULING_STATES.ROLL_ONLY && comp.type === 'aoe-reveal') {
+      await resolveComponent(eventId, comp.id, CONFIG.RULING_STATES.APPROVED);
+      continue;
+    }
+    await resolveComponent(eventId, comp.id, ruling);
+  }
+}
+
+/**
+ * Bug 12: run the calc pipeline for display, skip actor mutation entirely.
+ * Damage / buildup / restoration components get a calcResult so the chat card
+ * still shows the value. Condition + protection components have no dice, so
+ * the component just gets marked resolved with a rollOnly flag.
+ */
+function _executeComponentRollOnly(comp, defenderActor, currentRound) {
+  if (comp.isImmune) {
+    // Treat immunity the same way _executeComponent does. No calc, no apply.
+    comp.result = { immune: true, rollOnly: true, message: `${defenderActor?.name || 'Target'} is immune` };
+    return;
+  }
+
+  switch (comp.type) {
+    case 'damage': {
+      const activeVuln = getVulnerabilityForDamageType(defenderActor, comp.damageType);
+      const damageOptions = {
+        piercingTiers: comp.piercing?.tiers || 0,
+        piercingAllTiers: comp.piercing?.allTiers || false,
+        vulnerabilityTiers: activeVuln.tiers
+      };
+      const calcResult = calculateDamage(comp.rawAmount, comp.damageType, defenderActor, damageOptions);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    case 'status-buildup': {
+      const calcResult = calculateStatusBuildup(comp.rawAmount, comp.statusEffect, defenderActor, currentRound);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    case 'heal-hp':
+    case 'restore-fp':
+    case 'restore-ap': {
+      const restComp = { type: comp.type, amount: comp.rawAmount, allowOverMax: comp.allowOverMax };
+      const calcResult = calculateRestoration(restComp, defenderActor);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    case 'reduce-buildup': {
+      const restComp = { type: 'reduce-buildup', statusEffect: comp.statusEffect, amount: comp.rawAmount };
+      const calcResult = calculateRestoration(restComp, defenderActor);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    case 'cure-condition': {
+      const restComp = { type: 'cure-condition', conditions: comp.conditions || [] };
+      const calcResult = calculateRestoration(restComp, defenderActor);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    case 'cure-effect': {
+      const restComp = { type: 'cure-effect', statusEffects: comp.statusEffects || [] };
+      const calcResult = calculateRestoration(restComp, defenderActor);
+      comp.result = { calcResult, rollOnly: true };
+      break;
+    }
+    default: {
+      // Conditions, vulnerabilities, protections: no dice on the defender side.
+      // Mark as rolled + not applied so the chat card still lists them.
+      comp.result = { rollOnly: true };
+      break;
     }
   }
 }
@@ -866,7 +946,14 @@ async function _executeComponent(comp, defenderActor, currentRound, attackerActo
       return;
     }
     try {
-      await templateDoc.update({ hidden: false });
+      // Batch D: also flip playerVisibility flag. Without this, aoeGridHighlight
+      // keeps returning early for non-GM viewers even after hidden becomes
+      // false, and players only see Foundry's built-in template outline
+      // (fewer cells than the custom cell overlay the GM sees).
+      await templateDoc.update({
+        hidden: false,
+        'flags.souls-d20.playerVisibility': 'visible',
+      });
       comp.result = { revealed: true };
       debug(`AoE template ${templateId} revealed to players`);
     } catch (err) {
@@ -1234,6 +1321,18 @@ function _postRulingChat(event, comp) {
   if (comp.ruling === CONFIG.RULING_STATES.DENIED) {
     const reason = comp.autoReason ? ` (${comp.autoReason})` : '';
     detail = `<span class="ruling-denied">DENIED${reason}</span>`;
+  } else if (comp.ruling === CONFIG.RULING_STATES.ROLL_ONLY) {
+    // Bug 12: same rendering as approved but with a suffix so the GM sees
+    // that no actor mutation happened.
+    if (comp.type === 'damage' && comp.result?.calcResult) {
+      const cr = comp.result.calcResult;
+      detail = `<span style="color:${CONFIG.DAMAGE_TYPE_COLORS[comp.damageType] || '#fff'}">${comp.damageType}</span> ${cr.raw} → ${cr.final} damage <span class="roll-only-badge">Roll only</span>`;
+    } else if (comp.type === 'status-buildup' && comp.result?.calcResult) {
+      const cr = comp.result.calcResult;
+      detail = `${comp.statusEffect} +${cr.final} <span class="roll-only-badge">Roll only</span>`;
+    } else {
+      detail = `${comp.type} rolled <span class="roll-only-badge">Roll only</span>`;
+    }
   } else if (comp.result?.immune) {
     // Component was approved but target is immune - no effect applied
     detail = `<span class="ruling-immune">IMMUNE (no effect applied)</span>`;
@@ -1301,8 +1400,16 @@ function _rebuildChatWithApprovedComponents(event) {
     return chatData;
   }
 
-  // Get approved component indices by type
+  // Get approved (including roll-only) component indices by type. Track
+  // ROLL_ONLY indices separately so the filtered rows can carry a badge.
   const approvedIndices = {
+    damage: new Set(),
+    'status-buildup': new Set(),
+    'status-condition': new Set(),
+    vulnerability: new Set(),
+    restoration: new Set()
+  };
+  const rollOnlyIndices = {
     damage: new Set(),
     'status-buildup': new Set(),
     'status-condition': new Set(),
@@ -1311,12 +1418,12 @@ function _rebuildChatWithApprovedComponents(event) {
   };
 
   for (const comp of event.components) {
-    // Include approved, auto-succeed, and auto-fail (applied) components
-    const isApproved = comp.ruling === CONFIG.RULING_STATES.APPROVED ||
-                       comp.ruling === CONFIG.RULING_STATES.AUTO_SUCCEED ||
-                       comp.ruling === CONFIG.RULING_STATES.AUTO_FAIL;
-    if (isApproved && comp.originalIndex !== undefined) {
-      // Map component type to combatResults key
+    // Bug 12: ROLL_ONLY components count as visible (with badge) in the chat.
+    const isVisible = comp.ruling === CONFIG.RULING_STATES.APPROVED ||
+                      comp.ruling === CONFIG.RULING_STATES.AUTO_SUCCEED ||
+                      comp.ruling === CONFIG.RULING_STATES.AUTO_FAIL ||
+                      comp.ruling === CONFIG.RULING_STATES.ROLL_ONLY;
+    if (isVisible && comp.originalIndex !== undefined) {
       let key = comp.type;
       if (comp.type === 'heal-hp' || comp.type === 'restore-fp' || comp.type === 'restore-ap' ||
           comp.type === 'reduce-buildup' || comp.type === 'cure-condition' || comp.type === 'cure-effect') {
@@ -1324,18 +1431,26 @@ function _rebuildChatWithApprovedComponents(event) {
       }
       if (approvedIndices[key]) {
         approvedIndices[key].add(comp.originalIndex);
+        if (comp.ruling === CONFIG.RULING_STATES.ROLL_ONLY) rollOnlyIndices[key].add(comp.originalIndex);
       }
     }
   }
 
-  // Filter combatResults arrays to only include approved indices
+  // Filter combatResults arrays to only include approved indices. Stamp
+  // rollOnly on the surviving rows that were resolved as roll-only so the
+  // filtered chat can badge them.
+  const withRollOnly = (rows, key) => (rows || [])
+    .map((row, i) => approvedIndices[key].has(i)
+      ? { ...row, rollOnly: rollOnlyIndices[key].has(i) }
+      : null)
+    .filter(Boolean);
   const filteredResults = {
     ...combatResults,
-    damageRolls: (combatResults.damageRolls || []).filter((_, i) => approvedIndices.damage.has(i)),
-    buildupRolls: (combatResults.buildupRolls || []).filter((_, i) => approvedIndices['status-buildup'].has(i)),
-    conditionRolls: (combatResults.conditionRolls || []).filter((_, i) => approvedIndices['status-condition'].has(i)),
-    vulnerabilityRolls: (combatResults.vulnerabilityRolls || []).filter((_, i) => approvedIndices.vulnerability.has(i)),
-    restorationRolls: (combatResults.restorationRolls || []).filter((_, i) => approvedIndices.restoration.has(i))
+    damageRolls: withRollOnly(combatResults.damageRolls, 'damage'),
+    buildupRolls: withRollOnly(combatResults.buildupRolls, 'status-buildup'),
+    conditionRolls: withRollOnly(combatResults.conditionRolls, 'status-condition'),
+    vulnerabilityRolls: withRollOnly(combatResults.vulnerabilityRolls, 'vulnerability'),
+    restorationRolls: withRollOnly(combatResults.restorationRolls, 'restoration')
   };
 
   // Rebuild the HTML content with filtered results
@@ -1384,10 +1499,15 @@ function _buildFilteredChatContent(chatData, filteredResults) {
     html += `<div class="combat-section harmful">`;
     for (const dmg of filteredResults.damageRolls) {
       const color = CONFIG.DAMAGE_TYPE_COLORS[dmg.type] || '#c0c0c0';
+      const rollOnlyBadge = dmg.rollOnly ? '<span class="roll-only-badge">Roll only - not applied</span>' : '';
+      // Bug 11: prefer the per-die breakdown captured at roll time. Fall back
+      // to the formula string only for legacy chat data that predates the fix.
+      const diceHtml = dmg.diceBreakdown || `<span class="damage-formula">${dmg.formula || '0'}</span>`;
       html += `<div class="combat-component damage-row">`;
       html += `<span class="damage-type-label" style="color:${color}">${dmg.type || 'Physical'}</span>`;
-      html += `<span class="damage-formula">${dmg.formula || '0'}</span>`;
+      html += diceHtml;
       html += `<span class="damage-total">= ${dmg.total}</span>`;
+      html += rollOnlyBadge;
       html += `</div>`;
     }
     html += `</div>`;
@@ -1399,10 +1519,13 @@ function _buildFilteredChatContent(chatData, filteredResults) {
   if (hasBuildup || hasConditions) {
     html += `<div class="combat-section harmful">`;
     for (const eff of (filteredResults.buildupRolls || [])) {
+      const rollOnlyBadge = eff.rollOnly ? '<span class="roll-only-badge">Roll only - not applied</span>' : '';
+      const diceHtml = eff.diceBreakdown || `<span class="buildup-formula">${eff.formula || '0'}</span>`;
       html += `<div class="combat-component buildup-row">`;
       html += `<span class="buildup-label">${eff.name || 'Buildup'}</span>`;
-      html += `<span class="buildup-formula">${eff.formula || '0'}</span>`;
+      html += diceHtml;
       html += `<span class="buildup-total">= ${eff.total}</span>`;
+      html += rollOnlyBadge;
       html += `</div>`;
     }
     for (const cond of (filteredResults.conditionRolls || [])) {
@@ -1428,6 +1551,7 @@ function _buildFilteredChatContent(chatData, filteredResults) {
   if (filteredResults.restorationRolls?.length > 0) {
     html += `<div class="combat-section positive">`;
     for (const rest of filteredResults.restorationRolls) {
+      const rollOnlyBadge = rest.rollOnly ? '<span class="roll-only-badge">Roll only - not applied</span>' : '';
       html += `<div class="combat-component restoration-row">`;
       const typeLabels = {
         'heal-hp': 'Heal HP', 'restore-fp': 'Restore FP', 'restore-ap': 'Restore AP',
@@ -1437,10 +1561,12 @@ function _buildFilteredChatContent(chatData, filteredResults) {
       };
       html += `<span class="restoration-label">${typeLabels[rest.restorationType] || rest.restorationType}</span>`;
       if (rest.formula) {
-        html += `<span class="restoration-formula">${rest.formula}</span>`;
+        const diceHtml = rest.diceBreakdown || `<span class="restoration-formula">${rest.formula}</span>`;
+        html += diceHtml;
         html += `<span class="restoration-total">= ${rest.total}</span>`;
       }
       if (rest.allowOverMax) html += `<span class="restoration-overmax">Over Max</span>`;
+      html += rollOnlyBadge;
       html += `</div>`;
     }
     html += `</div>`;

@@ -28,6 +28,10 @@ export const CONFIG = {
     CHARACTER_RESPONSE: 'character:response',
     CHARACTER_RESPONSE_LINKED: 'characters:response-linked',  // Response with linked character data
     CHARACTER_UPDATE: 'character:update',
+    // Optimization 3: field-scoped update that only carries what changed.
+    // Foundry merges it into the stored snapshot and regenerates only the
+    // macros affected by the fields listed in the delta.
+    CHARACTER_DELTA_UPDATE: 'character:delta-update',
     ACTION_VALIDATED: 'combat:action-validated',
     COMBAT_DATA_RESPONSE: 'combat:response-data',
 
@@ -347,7 +351,11 @@ export const CONFIG = {
     APPROVED: 'approved',
     DENIED: 'denied',
     AUTO_SUCCEED: 'auto-succeed',
-    AUTO_FAIL: 'auto-fail'
+    AUTO_FAIL: 'auto-fail',
+    // Bug 12: perform the roll and show the result in chat, but skip the actor
+    // mutation. Useful when a table wants to see the value but a special block
+    // rule prevents application.
+    ROLL_ONLY: 'roll-only'
   },
 
   // Defender response states

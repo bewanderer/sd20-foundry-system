@@ -43,6 +43,9 @@
           <button type="button" data-action="approveAll" data-event-id="{{id}}" class="ruling-btn ruling-btn-approve">
             <i class="fa-solid fa-check-double"></i> Approve All
           </button>
+          <button type="button" data-action="rollOnlyAll" data-event-id="{{id}}" class="ruling-btn ruling-btn-roll-only" title="Roll all, apply none">
+            <i class="fa-solid fa-dice-d20"></i> Roll All
+          </button>
           <button type="button" data-action="denyAll" data-event-id="{{id}}" class="ruling-btn ruling-btn-deny">
             <i class="fa-solid fa-xmark"></i> Deny All
           </button>
@@ -163,6 +166,11 @@
                 <button type="button" data-action="approveComp" data-event-id="{{../id}}" data-comp-id="{{id}}" class="ruling-btn ruling-btn-approve" title="Approve">
                   <i class="fa-solid fa-check"></i>
                 </button>
+                {{#unless (eq type 'aoe-reveal')}}
+                <button type="button" data-action="rollOnlyComp" data-event-id="{{../id}}" data-comp-id="{{id}}" class="ruling-btn ruling-btn-roll-only" title="Roll only, do not apply">
+                  <i class="fa-solid fa-dice-d20"></i>
+                </button>
+                {{/unless}}
                 <button type="button" data-action="denyComp" data-event-id="{{../id}}" data-comp-id="{{id}}" class="ruling-btn ruling-btn-deny" title="Deny">
                   <i class="fa-solid fa-xmark"></i>
                 </button>

@@ -42,6 +42,31 @@ export function debug(message, ...args) {
 }
 
 /**
+ * Timing helper. When debug mode is off, runs the callback and returns its
+ * result with no measurement overhead. When debug mode is on, prints the
+ * elapsed ms and emits a `perf-metric` socket message so a GM in the same
+ * session can see player-side timings without touching each player's console.
+ */
+export async function perfTime(label, fn) {
+  if (!isDebugMode()) return fn();
+  const start = performance.now();
+  try {
+    return await fn();
+  } finally {
+    const ms = Math.round(performance.now() - start);
+    console.debug(`${CONFIG.MODULE_NAME} | [PERF] ${label}: ${ms}ms`);
+    try {
+      game.socket?.emit(`system.${CONFIG.MODULE_ID}`, {
+        type: 'perf-metric',
+        playerFoundryName: game.user?.name,
+        metric: label,
+        value: ms
+      });
+    } catch { /* socket unavailable during boot */ }
+  }
+}
+
+/**
  * Find token by character UUID
  * Checks Actor flags first, then Token flags (for migration compatibility)
  */

@@ -398,12 +398,19 @@ export class CombatSettingsDialog extends HandlebarsApplicationMixin(Application
       if (!name || name.startsWith('npcResistance.')) return;
       const parts = name.split('.');
       const val = parseFloat(input.value) || 0;
+      // Bug 14: autovivify the path. Previously, if a parent object did not
+      // exist (typical for actors that had never had passiveRecovery set),
+      // the write was silently skipped and it looked like the value did not
+      // save. Create the intermediate objects so the write always lands.
       if (parts.length === 3) {
-        // e.g. overrides.healing.flatBonus
-        if (settings[parts[0]]?.[parts[1]]) settings[parts[0]][parts[1]][parts[2]] = val;
+        if (!settings[parts[0]]) settings[parts[0]] = {};
+        if (!settings[parts[0]][parts[1]]) settings[parts[0]][parts[1]] = {};
+        settings[parts[0]][parts[1]][parts[2]] = val;
       } else if (parts.length === 4) {
-        // e.g. overrides.damage.Physical.flatReduction
-        if (settings[parts[0]]?.[parts[1]]?.[parts[2]]) settings[parts[0]][parts[1]][parts[2]][parts[3]] = val;
+        if (!settings[parts[0]]) settings[parts[0]] = {};
+        if (!settings[parts[0]][parts[1]]) settings[parts[0]][parts[1]] = {};
+        if (!settings[parts[0]][parts[1]][parts[2]]) settings[parts[0]][parts[1]][parts[2]] = {};
+        settings[parts[0]][parts[1]][parts[2]][parts[3]] = val;
       }
     });
 

@@ -1837,7 +1837,14 @@
               <option value="circle" {{#if (eq aoe.shape "circle")}}selected{{/if}}>Circle</option>
               <option value="cone" {{#if (eq aoe.shape "cone")}}selected{{/if}}>Cone</option>
               <option value="line" {{#if (eq aoe.shape "line")}}selected{{/if}}>Line</option>
-              <option value="hex" {{#if (eq aoe.shape "hex")}}selected{{/if}}>Hex</option>
+              <option value="square" {{#if (eq aoe.shape "square")}}selected{{/if}}>Square</option>
+              {{!-- Bug 1/10: Hex kept in code for legacy macros but hidden from
+                   the picker. If a macro was saved as hex before this change,
+                   we still preserve the value on load by showing it as the
+                   selected option so the player does not silently lose data. --}}
+              {{#if (eq aoe.shape "hex")}}
+              <option value="hex" selected>Hex (legacy)</option>
+              {{/if}}
             </select>
             <input type="number" name="aoe.sizeMin" {{#if aoe.sizeMin}}value="{{aoe.sizeMin}}"{{/if}} placeholder="Min" min="0" />
             <input type="number" name="aoe.sizeMax" {{#if aoe.sizeMax}}value="{{aoe.sizeMax}}"{{/if}} placeholder="Max" min="0" />

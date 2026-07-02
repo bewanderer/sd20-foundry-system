@@ -527,7 +527,9 @@ async function _rollComponent(component, casterToken) {
   const parts = [];
 
   const count = parseInt(component.diceCount) || 0;
-  const sides = parseInt(component.diceSides) || 6;
+  // Bug 7: || falls through on parseInt(0). Zero-sided dice are legitimate.
+  const parsedSides = parseInt(component.diceSides);
+  const sides = Number.isFinite(parsedSides) ? parsedSides : 6;
   if (count > 0) parts.push(`${count}d${sides}`);
 
   const flat = parseInt(component.flatBonus) || 0;
@@ -555,6 +557,8 @@ async function _rollComponent(component, casterToken) {
   result.roll = roll;
   result.total = roll.total;
   result.rollHTML = await roll.render();
+  // Bug 11: mirror macroBar so re-triggered AoE effects keep per-die info.
+  result.diceBreakdown = renderDiceBreakdown(roll);
   return result;
 }
 

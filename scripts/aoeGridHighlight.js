@@ -148,6 +148,13 @@ function _drawOverlay(templateDoc) {
       // Hidden from players - don't draw overlay
       return;
     }
+    // Bug 9: reactiveReveal hides the AoE cells from non-GM players until the
+    // GM approves the ruling that reveals the template. The template document
+    // is already created with hidden=true, but the highlight overlay is drawn
+    // client-side by us and needs its own gate.
+    if (visibility === 'reactiveReveal') {
+      return;
+    }
     // 'visible' and 'afterCast' both show the overlay once the template is created
     // 'afterCast' is effectively the same as 'visible' after placement is confirmed
   }
@@ -155,8 +162,10 @@ function _drawOverlay(templateDoc) {
   const shape = templateDoc.t;
   const distance = templateDoc.distance || 0;
 
-  // Handle circle, ray, and cone shapes
-  if (shape !== 'circle' && shape !== 'ray' && shape !== 'cone') return;
+  // Handle circle, ray, cone, and rect (Bug 10: Square). Rect only for our
+  // macro-created templates - Foundry's own rect drawings do not hit the
+  // early return in _drawOverlay's macroId guard.
+  if (shape !== 'circle' && shape !== 'ray' && shape !== 'cone' && shape !== 'rect') return;
 
   // Get exclusion radius from template flags (Feature 3 integration)
   const exclusionRadius = sd20Flags.exclusionRadius || 0;
@@ -175,6 +184,8 @@ function _drawOverlay(templateDoc) {
     _drawLineHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius);
   } else if (shape === 'cone') {
     _drawConeHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius);
+  } else if (shape === 'rect') {
+    _drawSquareHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius);
   }
 
   // Add to canvas interface layer
@@ -183,64 +194,17 @@ function _drawOverlay(templateDoc) {
 }
 
 /**
- * Draw circle/hex highlight using BFS ring expansion
- * Supports both square and hex grids
+ * Bug 1: draw circle highlight using Euclidean cell-center distance on
+ * square grids. The previous BFS ring approach used Chebyshev distance
+ * (king-move) and over-included corner cells at higher radii (a 10ft radius
+ * would light up 5x5 = 25 cells instead of the tabletop-expected 3x3 = 9).
+ * On hex grids the BFS ring approach is retained - hex distance is a
+ * different, well-defined metric that BFS models correctly.
  */
 function _drawCircleHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius) {
-  const radiusFt = templateDoc.distance || 0;
-  if (radiusFt <= 0) return;
-
-  // Origin position in pixels
-  const originX = templateDoc.x;
-  const originY = templateDoc.y;
-
-  // Calculate rings: 1 ring per gridDistance feet
-  const rings = Math.floor(radiusFt / gridDistance);
-  const exclusionRings = Math.floor(exclusionRadius / gridDistance);
-
-  if (rings <= 0) return;
-
-  // Get origin grid cell
-  const originCell = canvas.grid.getOffset({ x: originX, y: originY });
-
-  // BFS to find all cells within radius
-  const visited = new Set();
-  const cellsToHighlight = [];
-
-  // Queue: [row, col, distance in rings]
-  const queue = [[originCell.i, originCell.j, 0]];
-  visited.add(`${originCell.i},${originCell.j}`);
-
-  const isHex = canvas.grid.isHexagonal;
-
-  while (queue.length > 0) {
-    const [row, col, dist] = queue.shift();
-
-    // Add to highlight if within radius but outside exclusion
-    // When exclusionRings is 0, include ALL cells (no exclusion)
-    const isOutsideExclusion = exclusionRings <= 0 || dist > exclusionRings;
-    if (dist <= rings && isOutsideExclusion) {
-      cellsToHighlight.push({ row, col });
-    }
-
-    // Expand to neighbors if within radius
-    if (dist < rings) {
-      const neighborOffsets = _getNeighborOffsets(row, col, isHex);
-      for (const [dr, dc] of neighborOffsets) {
-        const nr = row + dr;
-        const nc = col + dc;
-        const key = `${nr},${nc}`;
-
-        if (!visited.has(key)) {
-          visited.add(key);
-          queue.push([nr, nc, dist + 1]);
-        }
-      }
-    }
-  }
-
-  // Draw each cell
-  for (const { row, col } of cellsToHighlight) {
+  const cells = _getCircleCells(templateDoc, gridSize, gridDistance, exclusionRadius);
+  for (const key of cells) {
+    const [row, col] = key.split(',').map(Number);
     const cellPos = canvas.grid.getTopLeftPoint({ i: row, j: col });
     _drawCell(overlay, cellPos.x, cellPos.y, gridSize, row, col);
   }
@@ -316,71 +280,14 @@ function _getNeighborOffsets(row, col, isHex) {
 }
 
 /**
- * Draw line/ray highlight using step-based rasterization
- * Properly handles width and exclusion zone across the full ray width
+ * Bug 1: draw line/ray highlight using the strict "cell center inside the
+ * ray rectangle" rule. Share cell selection with the targeting getter so the
+ * visual and the target set never drift.
  */
 function _drawLineHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius) {
-  const lengthFt = templateDoc.distance || 0;
-  if (lengthFt <= 0) return;
-
-  // Origin position in pixels
-  const originX = templateDoc.x;
-  const originY = templateDoc.y;
-
-  // Direction in radians
-  const direction = Math.toRadians(templateDoc.direction || 0);
-
-  // Ray dimensions in pixels
-  const lengthPx = (lengthFt / gridDistance) * gridSize;
-  const widthFt = templateDoc.width || gridDistance;
-  const widthPx = (widthFt / gridDistance) * gridSize;
-
-  // Exclusion distance in pixels (along the ray, not from origin point)
-  const exclusionPx = (exclusionRadius / gridDistance) * gridSize;
-
-  // Step size for sampling
-  const stepSize = gridSize / 4;
-  const lengthSteps = Math.ceil(lengthPx / stepSize);
-  const widthSteps = Math.max(1, Math.ceil(widthPx / stepSize));
-
-  // Perpendicular direction for width sampling
-  const perpDir = direction + Math.PI / 2;
-  const cosDir = Math.cos(direction);
-  const sinDir = Math.sin(direction);
-  const cosPerp = Math.cos(perpDir);
-  const sinPerp = Math.sin(perpDir);
-
-  const visitedCells = new Set();
-  const cellsToHighlight = [];
-
-  // Sample along the length
-  for (let i = 0; i <= lengthSteps; i++) {
-    const distAlongRay = i * stepSize;
-
-    // Skip if within exclusion zone (exclusion is measured along the ray)
-    if (distAlongRay < exclusionPx) continue;
-
-    // Sample across the width (centered on the ray)
-    for (let w = 0; w <= widthSteps; w++) {
-      // Width offset from center (-halfWidth to +halfWidth)
-      const widthOffset = (w / widthSteps - 0.5) * widthPx;
-
-      const x = originX + cosDir * distAlongRay + cosPerp * widthOffset;
-      const y = originY + sinDir * distAlongRay + sinPerp * widthOffset;
-
-      // Get grid cell at this point
-      const cell = canvas.grid.getOffset({ x, y });
-      const key = `${cell.i},${cell.j}`;
-
-      if (!visitedCells.has(key)) {
-        visitedCells.add(key);
-        cellsToHighlight.push({ row: cell.i, col: cell.j });
-      }
-    }
-  }
-
-  // Draw each cell
-  for (const { row, col } of cellsToHighlight) {
+  const cells = _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius);
+  for (const key of cells) {
+    const [row, col] = key.split(',').map(Number);
     const cellPos = canvas.grid.getTopLeftPoint({ i: row, j: col });
     _drawCell(overlay, cellPos.x, cellPos.y, gridSize, row, col);
   }
@@ -546,6 +453,8 @@ export function getHighlightedCells(templateDoc) {
     return _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius);
   } else if (shape === 'cone') {
     return _getConeCells(templateDoc, gridSize, gridDistance, exclusionRadius);
+  } else if (shape === 'rect') {
+    return _getSquareCells(templateDoc, gridSize, gridDistance, exclusionRadius);
   }
 
   return new Set();
@@ -569,54 +478,66 @@ export function isTokenInHighlightedCells(token, templateDoc) {
 }
 
 /**
- * Get cells for circle/hex templates (BFS ring expansion)
+ * Batch D: circle cell coverage.
+ * - Square grid: Chebyshev (king-move) rings. N feet covers all cells within
+ *   floor(N / gridDistance) rings. 5 ft = 3x3, 10 ft = 5x5, 15 ft = 7x7.
+ *   Diagonals count as adjacent, matching tabletop convention.
+ * - Hex grid: BFS by rings using proper hex neighbor offsets.
+ * Exclusion: cells within `exclusionRadius` rings are dropped.
  */
 function _getCircleCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const cells = new Set();
   const radiusFt = templateDoc.distance || 0;
   if (radiusFt <= 0) return cells;
 
-  const originX = templateDoc.x;
-  const originY = templateDoc.y;
   const rings = Math.floor(radiusFt / gridDistance);
   const exclusionRings = Math.floor(exclusionRadius / gridDistance);
-
   if (rings <= 0) return cells;
 
-  const originCell = canvas.grid.getOffset({ x: originX, y: originY });
-  const visited = new Set();
-  const queue = [[originCell.i, originCell.j, 0]];
-  visited.add(`${originCell.i},${originCell.j}`);
-
+  const originCell = canvas.grid.getOffset({ x: templateDoc.x, y: templateDoc.y });
   const isHex = canvas.grid.isHexagonal;
 
-  while (queue.length > 0) {
-    const [row, col, dist] = queue.shift();
-    const isOutsideExclusion = exclusionRings <= 0 || dist > exclusionRings;
-
-    if (dist <= rings && isOutsideExclusion) {
-      cells.add(`${row},${col}`);
-    }
-
-    if (dist < rings) {
-      const neighborOffsets = _getNeighborOffsets(row, col, isHex);
-      for (const [dr, dc] of neighborOffsets) {
-        const nr = row + dr;
-        const nc = col + dc;
-        const key = `${nr},${nc}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          queue.push([nr, nc, dist + 1]);
+  if (isHex) {
+    const visited = new Set();
+    const queue = [[originCell.i, originCell.j, 0]];
+    visited.add(`${originCell.i},${originCell.j}`);
+    while (queue.length > 0) {
+      const [row, col, dist] = queue.shift();
+      const outside = exclusionRings <= 0 || dist > exclusionRings;
+      if (dist <= rings && outside) cells.add(`${row},${col}`);
+      if (dist < rings) {
+        const neighborOffsets = _getNeighborOffsets(row, col, isHex);
+        for (const [dr, dc] of neighborOffsets) {
+          const nr = row + dr;
+          const nc = col + dc;
+          const key = `${nr},${nc}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            queue.push([nr, nc, dist + 1]);
+          }
         }
       }
     }
+    return cells;
   }
 
+  // Square grid: Chebyshev.
+  for (let dRow = -rings; dRow <= rings; dRow++) {
+    for (let dCol = -rings; dCol <= rings; dCol++) {
+      const chebyshev = Math.max(Math.abs(dRow), Math.abs(dCol));
+      if (chebyshev > rings) continue;
+      if (exclusionRings > 0 && chebyshev <= exclusionRings) continue;
+      cells.add(`${originCell.i + dRow},${originCell.j + dCol}`);
+    }
+  }
   return cells;
 }
 
 /**
- * Get cells for line/ray templates (step-based rasterization)
+ * Bug 1: cells for line/ray templates. Include a cell only if its center
+ * lies inside the ray's local-frame rectangle (0 <= x <= lengthPx and
+ * abs(y) <= halfWidthPx). This is stricter than the previous over-sampled
+ * approach and stops the "5ft-wide line paints 10ft" symptom.
  */
 function _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const cells = new Set();
@@ -629,29 +550,31 @@ function _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const lengthPx = (lengthFt / gridDistance) * gridSize;
   const widthFt = templateDoc.width || gridDistance;
   const widthPx = (widthFt / gridDistance) * gridSize;
+  const halfWidthPx = widthPx / 2;
   const exclusionPx = (exclusionRadius / gridDistance) * gridSize;
 
-  const stepSize = gridSize / 4;
-  const lengthSteps = Math.ceil(lengthPx / stepSize);
-  const widthSteps = Math.max(1, Math.ceil(widthPx / stepSize));
-
-  const perpDir = direction + Math.PI / 2;
   const cosDir = Math.cos(direction);
   const sinDir = Math.sin(direction);
-  const cosPerp = Math.cos(perpDir);
-  const sinPerp = Math.sin(perpDir);
 
-  for (let i = 0; i <= lengthSteps; i++) {
-    const distAlongRay = i * stepSize;
-    if (distAlongRay < exclusionPx) continue;
+  // Bounding-box cell range large enough to contain the whole ray at any
+  // rotation. Use max(length, width) as the half-extent buffer.
+  const originCell = canvas.grid.getOffset({ x: originX, y: originY });
+  const cellSpan = Math.ceil(Math.max(lengthPx, widthPx) / gridSize) + 2;
 
-    for (let w = 0; w <= widthSteps; w++) {
-      const widthOffset = (w / widthSteps - 0.5) * widthPx;
-      const x = originX + cosDir * distAlongRay + cosPerp * widthOffset;
-      const y = originY + sinDir * distAlongRay + sinPerp * widthOffset;
-
-      const cell = canvas.grid.getOffset({ x, y });
-      cells.add(`${cell.i},${cell.j}`);
+  for (let dRow = -cellSpan; dRow <= cellSpan; dRow++) {
+    for (let dCol = -cellSpan; dCol <= cellSpan; dCol++) {
+      const row = originCell.i + dRow;
+      const col = originCell.j + dCol;
+      const center = canvas.grid.getCenterPoint({ i: row, j: col });
+      const dx = center.x - originX;
+      const dy = center.y - originY;
+      // Rotate into local frame where the ray goes down the +x axis.
+      const localX = dx * cosDir + dy * sinDir;
+      const localY = -dx * sinDir + dy * cosDir;
+      if (localX < 0 || localX > lengthPx) continue;
+      if (Math.abs(localY) > halfWidthPx) continue;
+      if (exclusionPx > 0 && localX < exclusionPx) continue;
+      cells.add(`${row},${col}`);
     }
   }
 
@@ -693,5 +616,73 @@ function _getConeCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
     }
   }
 
+  return cells;
+}
+
+/**
+ * Bug 10: draw a Square AoE. Square uses Foundry's rect template type where
+ * width == distance (both in feet). We draw only the cells inside that
+ * square. Placement snapping is handled at template creation time in
+ * macroBar._createAOETemplate.
+ */
+function _drawSquareHighlight(overlay, templateDoc, gridSize, gridDistance, exclusionRadius) {
+  const cells = _getSquareCells(templateDoc, gridSize, gridDistance, exclusionRadius);
+  for (const key of cells) {
+    const [row, col] = key.split(',').map(Number);
+    const cellPos = canvas.grid.getTopLeftPoint({ i: row, j: col });
+    _drawCell(overlay, cellPos.x, cellPos.y, gridSize, row, col);
+  }
+}
+
+/**
+ * Batch D: square cell coverage.
+ *
+ * Square is a rotated rectangle centered on the template origin. Distance N
+ * is the half-extent from center in feet. At rotation 0, coverage matches an
+ * N-ft Chebyshev circle. At other rotations, cells whose center falls inside
+ * the rotated rectangle are included.
+ *
+ * Rotation is derived from templateDoc.direction (Foundry stores it in
+ * degrees). Exclusion carves a smaller centered rotated square out of the
+ * middle.
+ */
+function _getSquareCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
+  const cells = new Set();
+  const halfExtentFt = templateDoc.distance || 0;
+  if (halfExtentFt <= 0) return cells;
+
+  const originX = templateDoc.x;
+  const originY = templateDoc.y;
+  const halfExtentPx = (halfExtentFt / gridDistance) * gridSize;
+  const exclusionHalfPx = (exclusionRadius / gridDistance) * gridSize;
+
+  const angleRad = Math.toRadians(templateDoc.direction || 0);
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+
+  // Bounding box big enough to contain the rotated square at any angle. The
+  // rotated square's outer bounding box has half-extent sqrt(2) * halfExtent.
+  const originCell = canvas.grid.getOffset({ x: originX, y: originY });
+  const cellSpan = Math.ceil((halfExtentPx * Math.SQRT2) / gridSize) + 1;
+
+  for (let dRow = -cellSpan; dRow <= cellSpan; dRow++) {
+    for (let dCol = -cellSpan; dCol <= cellSpan; dCol++) {
+      const row = originCell.i + dRow;
+      const col = originCell.j + dCol;
+      const center = canvas.grid.getCenterPoint({ i: row, j: col });
+      const dx = center.x - originX;
+      const dy = center.y - originY;
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      if (Math.abs(localX) > halfExtentPx) continue;
+      if (Math.abs(localY) > halfExtentPx) continue;
+      if (exclusionHalfPx > 0
+          && Math.abs(localX) < exclusionHalfPx
+          && Math.abs(localY) < exclusionHalfPx) {
+        continue;
+      }
+      cells.add(`${row},${col}`);
+    }
+  }
   return cells;
 }

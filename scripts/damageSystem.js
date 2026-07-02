@@ -107,7 +107,7 @@ export function getActorCombatSettings(actor) {
       damage: _mergeOverrideGroup(DEFAULT_COMBAT_SETTINGS.overrides.damage, stored.overrides?.damage),
       statusBuildup: _mergeOverrideGroup(DEFAULT_COMBAT_SETTINGS.overrides.statusBuildup, stored.overrides?.statusBuildup),
       healing: { ...DEFAULT_COMBAT_SETTINGS.overrides.healing, ...stored.overrides?.healing },
-      passiveRecovery: { ...DEFAULT_COMBAT_SETTINGS.overrides.passiveRecovery, ...stored.overrides?.passiveRecovery },
+      passiveRecovery: _mergePassiveRecovery(DEFAULT_COMBAT_SETTINGS.overrides.passiveRecovery, stored.overrides?.passiveRecovery),
       statusRecovery: _mergeStatusRecovery(DEFAULT_COMBAT_SETTINGS.overrides.statusRecovery, stored.overrides?.statusRecovery)
     },
     tokenUI: {
@@ -125,6 +125,26 @@ function _mergeOverrideGroup(defaults, stored) {
     result[key] = { ...defaults[key], ...stored[key] };
   }
   return result;
+}
+
+/**
+ * Bug 14: promote legacy hpPerRound / fpPerRound (a single per-round value)
+ * into the new per-timing fields (hpPerRoundStart / hpPerRoundEnd, same for FP)
+ * when the new fields are absent. Legacy semantics were "applied at turn start",
+ * so the legacy value maps to hpPerRoundStart.
+ *
+ * Idempotent: once the actor is saved with the new fields, this becomes a no-op.
+ */
+function _mergePassiveRecovery(defaults, stored) {
+  if (!stored) return { ...defaults };
+  const merged = { ...defaults, ...stored };
+  if (stored.hpPerRoundStart === undefined && stored.hpPerRound !== undefined) {
+    merged.hpPerRoundStart = stored.hpPerRound;
+  }
+  if (stored.fpPerRoundStart === undefined && stored.fpPerRound !== undefined) {
+    merged.fpPerRoundStart = stored.fpPerRound;
+  }
+  return merged;
 }
 
 function _mergeStatusRecovery(defaults, stored) {
