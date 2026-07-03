@@ -167,10 +167,14 @@ export class MacroBar {
     if (savedData) {
       // Check if it's the new format (has setOrder) or old format
       if (savedData.setOrder) {
-        // New format
+        // New format. Deep clone to sever reference sharing with the stored
+        // flag object. Foundry returns live references from getFlag; without
+        // cloning, mutations to this.macroSets also mutate the stored flag,
+        // which then makes the diff check in saveMacroSets falsely report
+        // "no changes" and silently drop the write.
         this.activeSet = savedData.activeSet || savedData.setOrder[0];
-        this.macroSets = savedData.sets || {};
-        this.setOrder = savedData.setOrder || [];
+        this.macroSets = savedData.sets ? foundry.utils.deepClone(savedData.sets) : {};
+        this.setOrder = savedData.setOrder ? [...savedData.setOrder] : [];
       } else if (savedData.sets) {
         // Old format - migrate to new
         this._migrateOldFormat(savedData);
@@ -182,10 +186,15 @@ export class MacroBar {
       this._initializeDefaultSets();
     }
 
-    // Fetch macros from App only if linked to a character
-    if (this.characterUUID) {
-      await this.refreshMacros();
-    } else {
+    // Linked characters: use the persisted macros loaded above. Do NOT fetch
+    // from the App on every bar init. Auto-fetching on select made every
+    // reselect wait up to 30s when the App was offline, and even when online
+    // it produced constant WS chatter. Fetching now only happens in two
+    // places: on initial link (see the updateActor hook below) and when the
+    // user manually clicks Refresh from App in the bar. Both call
+    // refreshMacros(), which now persists the merged result via saveMacroSets
+    // so subsequent selects render straight from actor.system.macroSets.
+    if (!this.characterUUID) {
       // For unlinked actors (NPCs/monsters), generate basic macros from token's actor data
       // IMPORTANT: Use token.actor (synthetic actor) for unlinked tokens to get token-specific stats
       // game.actors.get() returns base actor which lacks token-specific combat settings
@@ -436,13 +445,14 @@ export class MacroBar {
     this.macroSets = {};
     this.setOrder = [];
 
-    // Convert numbered sets to named sets
+    // Convert numbered sets to named sets. Deep-clone the macros array so
+    // this.macroSets stays independent of the source flag object.
     for (const [key, macros] of Object.entries(oldSets)) {
       const setId = `set-${key}`;
       this.macroSets[setId] = {
         id: setId,
         name: `Set ${key}`,
-        macros: macros || [],
+        macros: macros ? foundry.utils.deepClone(macros) : [],
         active: true
       };
       this.setOrder.push(setId);
@@ -3685,6 +3695,13 @@ export class MacroBar {
     const isPlayerOwned = token.actor?.hasPlayerOwner || false;
     const playerVisibility = isPlayerOwned ? 'visible' : (macro.aoe?.playerVisibility || 'hidden');
 
+    // For originate-from-self, capture the caster's footprint so the AoE cell
+    // math can measure distance from the token's outer edge instead of from a
+    // single center cell. Without this, a 4-tile creature centering a 20ft
+    // circle would only get 15ft of usable reach past its own footprint.
+    const casterWidthCells = originateSelf ? Math.max(1, Math.round(token.document.width || 1)) : 1;
+    const casterHeightCells = originateSelf ? Math.max(1, Math.round(token.document.height || 1)) : 1;
+
     const templateData = {
       t,
       user: game.user.id,
@@ -3704,6 +3721,11 @@ export class MacroBar {
           macroId: macro.id,
           exclusionRadius: parseInt(macro.aoe?.exclusionRadius) || 0,
           followsCaster: originateSelf && (macro.aoe?.followsCaster || false),
+          // Caster footprint in cells. Only set >1 when the AoE originates from
+          // a caster larger than 1x1. Consumed by aoeGridHighlight so the AoE
+          // measures reach from the footprint's outer edge.
+          originatorWidth: casterWidthCells,
+          originatorHeight: casterHeightCells,
           playerVisibility,
           // Store combat data for AoE repeat execution
           macroData: {
@@ -3735,10 +3757,23 @@ export class MacroBar {
     // Batch D: unified placement widget for every shape.
     // - originateSelf pins the origin at the caster (fixedOrigin option).
     // - Others start by asking the GM to click an origin.
+    // - Cones and lines from a caster larger than 1x1 emit from the caster's
+    //   outer edge in the aim direction rather than the geometric center, so
+    //   the widget also receives casterFootprint to reposition the origin as
+    //   the aim direction changes.
     if (originateSelf) {
+      const gridSize = canvas.grid.size || 100;
+      const halfExtentX = (token.document.width || 1) * gridSize / 2;
+      const halfExtentY = (token.document.height || 1) * gridSize / 2;
       return await placeAoETemplate(templateData, {
         scaleOpts,
         fixedOrigin: { x: token.center.x, y: token.center.y },
+        casterFootprint: {
+          centerX: token.center.x,
+          centerY: token.center.y,
+          halfExtentX,
+          halfExtentY,
+        },
       });
     }
     return await placeAoETemplate(templateData, { scaleOpts });
@@ -4087,11 +4122,16 @@ export class MacroBar {
     };
     const enterSnapshot = buildSnapshot();
 
-    const macroData = {
+    // Deep clone to sever reference sharing with in-memory state. Foundry
+    // stores flag/system values by reference on write; without cloning here
+    // the persisted object shares memory with this.macroSets, so the next
+    // addMacroToSlot silently mutates both, the diff below comes up empty,
+    // and the actual disk write is skipped.
+    const macroData = foundry.utils.deepClone({
       activeSet: this.activeSet,
       sets: this.macroSets,
       setOrder: this.setOrder
-    };
+    });
 
     const useActorStorage = this.characterUUID || !this.isUnlinked;
 
@@ -4374,6 +4414,18 @@ export function registerMacroBar() {
       const token = canvas.tokens.get(activeMacroBar.tokenId);
       if (token) {
         showMacroBar(token);
+        // Initial-link path: initialize() no longer auto-fetches from the App
+        // on every select (that made reselect wait up to 30s and produced
+        // constant WS chatter). It still needs to fetch on the ONE moment a
+        // character gets linked, so we trigger refreshMacros here explicitly.
+        // The refresh persists the merged result to actor.system.macroSets so
+        // every subsequent select renders straight from storage.
+        const newBar = activeMacroBar;
+        if (newBar?.characterUUID) {
+          newBar.refreshMacros().then(() => {
+            if (newBar.rendered && activeMacroBar === newBar) newBar.render();
+          }).catch(err => debug('initial-link refreshMacros failed:', err));
+        }
       }
       return;
     }
@@ -4385,9 +4437,14 @@ export function registerMacroBar() {
       const freshActor = game.actors.get(actor.id);
       const savedData = freshActor?.system?.macroSets;
       if (savedData) {
+        // Deep clone: savedData is a live reference to the stored actor system
+        // data. Without cloning here, activeMacroBar.macroSets would share
+        // memory with actor.system.macroSets, so the next addMacroToSlot
+        // mutation would also mutate the actor, and saveMacroSets would then
+        // diff against the mutated state and silently drop the write.
         activeMacroBar.activeSet = savedData.activeSet || activeMacroBar.activeSet;
-        activeMacroBar.macroSets = savedData.sets || activeMacroBar.macroSets;
-        activeMacroBar.setOrder = savedData.setOrder || activeMacroBar.setOrder;
+        activeMacroBar.macroSets = savedData.sets ? foundry.utils.deepClone(savedData.sets) : activeMacroBar.macroSets;
+        activeMacroBar.setOrder = savedData.setOrder ? [...savedData.setOrder] : activeMacroBar.setOrder;
       }
       activeMacroBar.render();
     }

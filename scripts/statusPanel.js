@@ -606,8 +606,11 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
       }
     }
 
-    // Normal update (threshold not reached) - just set the buildup value
-    const buildup = actor.getFlag(MODULE, 'statusBuildup') || {};
+    // Normal update (threshold not reached) - just set the buildup value.
+    // Deep-clone the read: Foundry returns a live reference from getFlag, and
+    // mutating it in place also mutates the stored flag object, so the next
+    // setFlag diff sees no change and silently drops the write.
+    const buildup = foundry.utils.deepClone(actor.getFlag(MODULE, 'statusBuildup') || {});
     buildup[effectName] = buildup[effectName] || {};
     buildup[effectName].current = value;
     await actor.setFlag(MODULE, 'statusBuildup', buildup);
@@ -622,7 +625,9 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
   async _updateConditionDuration(conditionName, duration) {
     if (!this.canEdit || !this.actor) return;
 
-    const conditions = this.actor.getFlag(MODULE, 'activeConditions') || {};
+    // Clone the read so in-place mutation does not leak into Foundry's live
+    // stored flag object (see updateStatusBuildup for the full explanation).
+    const conditions = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'activeConditions') || {});
     if (!conditions[conditionName]) return;
 
     conditions[conditionName].remainingRounds = duration;
@@ -638,7 +643,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.canEdit || !this.actor) return;
     if (!conditionName || isNaN(entryIndex) || !field) return;
 
-    const conditions = this.actor.getFlag(MODULE, 'activeConditions') || {};
+    // Clone the read to keep in-place mutations on our copy only.
+    const conditions = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'activeConditions') || {});
     const condData = conditions[conditionName];
     if (!condData?.stackEntries || entryIndex >= condData.stackEntries.length) return;
 
@@ -668,7 +674,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.canEdit || !this.actor) return;
     if (!vulnId || !field) return;
 
-    const vulns = this.actor.getFlag(MODULE, 'vulnerabilities') || [];
+    // Clone the read to keep in-place mutations on our copy only.
+    const vulns = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'vulnerabilities') || []);
     const vuln = vulns.find(v => v.id === vulnId);
     if (!vuln) return;
 
@@ -691,8 +698,11 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.canEdit || !this.actor) return;
     if (!category || !protId || !field) return;
 
+    // getActorProtections returns arrays that are live references to the
+    // stored flag; clone the array we plan to mutate so setFlag actually
+    // persists the change.
     const protections = getActorProtections(this.actor);
-    const protArray = protections[category];
+    const protArray = protections[category] ? foundry.utils.deepClone(protections[category]) : null;
     if (!protArray) return;
 
     const prot = protArray.find(p => p.id === protId);
@@ -720,7 +730,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.canEdit || !this.actor) return;
 
     const STACKABLE_CONDITIONS = ['Frenzy', 'Exhaustion'];
-    const conditions = this.actor.getFlag(MODULE, 'activeConditions') || {};
+    // Clone the read to keep the activate-branch mutations on our copy only.
+    const conditions = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'activeConditions') || {});
     const isActive = conditions[conditionName]?.active || false;
 
     if (isActive) {
@@ -733,7 +744,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
       // Reset buildup's lastTriggeredRound so it can accumulate again immediately
       const buildupName = CONDITION_TO_BUILDUP[conditionName];
       if (buildupName) {
-        const buildup = this.actor.getFlag(MODULE, 'statusBuildup') || {};
+        // Clone the read to keep in-place mutation on our copy only.
+        const buildup = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'statusBuildup') || {});
         if (buildup[buildupName]) {
           buildup[buildupName].lastTriggeredRound = -1;
           await this.actor.setFlag(MODULE, 'statusBuildup', buildup);
@@ -844,8 +856,9 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static async #onResetBuildup() {
     if (!this.canEdit || !this.actor) return;
-    // Reset all buildup values to 0
-    const buildup = this.actor.getFlag(MODULE, 'statusBuildup') || {};
+    // Reset all buildup values to 0.
+    // Clone the read to keep in-place mutation on our copy only.
+    const buildup = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'statusBuildup') || {});
     for (const effect of BUILDUP_EFFECTS) {
       if (buildup[effect]) {
         buildup[effect].current = 0;
@@ -916,7 +929,8 @@ export class StatusPanel extends HandlebarsApplicationMixin(ApplicationV2) {
     const entryIndex = parseInt(target.dataset.entryIndex);
     if (!conditionName || isNaN(entryIndex)) return;
 
-    const conditions = this.actor.getFlag(MODULE, 'activeConditions') || {};
+    // Clone the read since we splice stackEntries and mutate totalStacks below.
+    const conditions = foundry.utils.deepClone(this.actor.getFlag(MODULE, 'activeConditions') || {});
     const condData = conditions[conditionName];
     if (!condData?.stackEntries || entryIndex >= condData.stackEntries.length) return;
 

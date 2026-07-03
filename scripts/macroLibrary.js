@@ -32,11 +32,16 @@ export function registerLibrarySettings() {
 }
 
 /**
- * Get the current user's macro library from user flags
+ * Get the current user's macro library from user flags.
+ * Always returns a deep clone: Foundry's getFlag returns a live reference to
+ * the stored value, and every caller here mutates the result (push, splice,
+ * Object.assign) before calling saveLibrary. Without cloning here, those
+ * mutations also mutate the stored flag object, so the next saveLibrary sees
+ * no diff and silently drops the write.
  */
 export function getLibrary() {
   const data = game.user.getFlag(CONFIG.MODULE_ID, FLAG_KEY);
-  return data || { macros: [], version: 1 };
+  return data ? foundry.utils.deepClone(data) : { macros: [], version: 1 };
 }
 
 /**

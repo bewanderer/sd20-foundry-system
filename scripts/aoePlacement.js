@@ -83,7 +83,7 @@ function _clampSize(valueFt, scaleOpts) {
  * @returns {Promise<TemplateDocument|null>}
  */
 export function placeAoETemplate(templateData, options = {}) {
-  const { scaleOpts = null, fixedOrigin = null } = options;
+  const { scaleOpts = null, fixedOrigin = null, casterFootprint = null } = options;
 
   return new Promise((resolve) => {
     const shape = templateData.t;
@@ -307,11 +307,32 @@ export function placeAoETemplate(templateData, options = {}) {
     function render() {
       overlay.clear();
 
-      // Phase 0: preview anchor cell only.
+      // Phase 0: preview anchor + a min-size footprint so the GM can gauge
+      // coverage before committing an anchor. For circles and squares we can
+      // draw the actual shape at its minimum size. For cones and lines the
+      // direction is not decided yet, so we draw a reach ring at the minimum
+      // distance instead of a directional shape.
       if (phase === 0) {
         const snapped = _snapToCellCenter(cursorWorld.x, cursorWorld.y);
+        const minSize = scaleOpts?.minSize ?? templateData.distance ?? SIZE_STEP_FT;
+
+        if (isCircle || isSquare) {
+          const previewData = { ...templateData };
+          previewData.x = snapped.x;
+          previewData.y = snapped.y;
+          previewData.distance = minSize;
+          previewData.direction = templateData.direction || 0;
+          _drawCells(overlay, previewData);
+          _drawOutline(overlay, previewData);
+        } else if (isCone || isLine) {
+          const reachPx = _ftToPx(minSize);
+          overlay.lineStyle(2, OUTLINE_COLOR, OUTLINE_ALPHA * 0.6);
+          overlay.drawCircle(snapped.x, snapped.y, reachPx);
+          overlay.lineStyle(0);
+        }
+
         _drawAnchorMarker(overlay, snapped.x, snapped.y);
-        label.text = 'click to place';
+        label.text = `${minSize} ft base - click to place`;
         label.position.set(snapped.x + 20, snapped.y - 20);
         _updateHint('Left-click to set anchor. Right-click / Escape to cancel.');
         return;
@@ -361,8 +382,15 @@ export function placeAoETemplate(templateData, options = {}) {
     }
 
     function _updateFromCursor() {
-      const dx = cursorWorld.x - templateData.x;
-      const dy = cursorWorld.y - templateData.y;
+      // For cone/line from a large caster we shift the emission point (and
+      // therefore templateData.x/y) to the caster's outer edge in the aim
+      // direction. Compute the anchor for angle/distance measurement from the
+      // ORIGINAL caster center, not the shifted origin, otherwise the distance
+      // measurement would shrink as the origin moves toward the cursor.
+      const measureFromX = casterFootprint ? casterFootprint.centerX : templateData.x;
+      const measureFromY = casterFootprint ? casterFootprint.centerY : templateData.y;
+      const dx = cursorWorld.x - measureFromX;
+      const dy = cursorWorld.y - measureFromY;
       const dist = Math.hypot(dx, dy);
       const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
 
@@ -376,6 +404,7 @@ export function placeAoETemplate(templateData, options = {}) {
         templateData.direction = angleDeg;
         const distFt = _pxToFeet(dist);
         templateData.distance = _clampSize(distFt, scaleOpts);
+        _shiftOriginToCasterEdge(angleDeg);
         return;
       }
 
@@ -383,6 +412,7 @@ export function placeAoETemplate(templateData, options = {}) {
         templateData.direction = angleDeg;
         const distFt = _pxToFeet(dist);
         templateData.distance = _clampSize(distFt, scaleOpts);
+        _shiftOriginToCasterEdge(angleDeg);
         return;
       }
 
@@ -414,6 +444,27 @@ export function placeAoETemplate(templateData, options = {}) {
         ? canvas.canvasCoordinatesFromClient({ x: margin, y: view.clientHeight - margin })
         : { x: 0, y: 0 };
       hint.position.set(client.x, client.y);
+    }
+
+    // For cone/line from a larger-than-1x1 caster: move the template origin
+    // from the caster's geometric center to the point where the aim ray exits
+    // the caster's rectangular footprint. That is the tabletop-natural
+    // emission point (edge facing the target) instead of "inside" the caster.
+    // Ray-vs-axis-aligned-rectangle intersection: parameterize (t*cos, t*sin)
+    // and pick the smallest positive t where the ray touches a rectangle edge.
+    function _shiftOriginToCasterEdge(directionDeg) {
+      if (!casterFootprint) return;
+      const { centerX, centerY, halfExtentX, halfExtentY } = casterFootprint;
+      if (halfExtentX <= 0 && halfExtentY <= 0) return;
+      const rad = Math.toRadians(directionDeg);
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      // Smallest positive scale to reach a rectangle edge in the aim direction.
+      const tx = Math.abs(cos) > 1e-9 ? halfExtentX / Math.abs(cos) : Infinity;
+      const ty = Math.abs(sin) > 1e-9 ? halfExtentY / Math.abs(sin) : Infinity;
+      const t = Math.min(tx, ty);
+      templateData.x = centerX + cos * t;
+      templateData.y = centerY + sin * t;
     }
   });
 }

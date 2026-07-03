@@ -61,10 +61,31 @@ async function _onTokenUpdate(tokenDoc, changes) {
     const centerX = newX + tokenWidth / 2;
     const centerY = newY + tokenHeight / 2;
 
+    // For cones and lines emitted from the caster's edge (large casters), the
+    // template origin lives at the footprint boundary in the aim direction,
+    // not at the geometric center. Recompute the edge point relative to the
+    // new center so followsCaster keeps the emission at the caster's edge as
+    // it moves. Circles and squares stay anchored at the center.
+    let targetX = centerX;
+    let targetY = centerY;
+    const shape = template.t;
+    if ((shape === 'cone' || shape === 'ray') && (tokenWidth > gridSize || tokenHeight > gridSize)) {
+      const rad = Math.toRadians(template.direction || 0);
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const halfX = tokenWidth / 2;
+      const halfY = tokenHeight / 2;
+      const tx = Math.abs(cos) > 1e-9 ? halfX / Math.abs(cos) : Infinity;
+      const ty = Math.abs(sin) > 1e-9 ? halfY / Math.abs(sin) : Infinity;
+      const t = Math.min(tx, ty);
+      targetX = centerX + cos * t;
+      targetY = centerY + sin * t;
+    }
+
     // Update template position to follow the token
     await template.update({
-      x: centerX,
-      y: centerY
+      x: targetX,
+      y: targetY,
     });
   }
 }
@@ -498,6 +519,8 @@ function _getCircleCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const isHex = canvas.grid.isHexagonal;
 
   if (isHex) {
+    // Hex grid keeps the BFS-from-single-cell model. Large-caster expansion
+    // on hex would need a different metric; punt for now.
     const visited = new Set();
     const queue = [[originCell.i, originCell.j, 0]];
     visited.add(`${originCell.i},${originCell.j}`);
@@ -521,16 +544,66 @@ function _getCircleCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
     return cells;
   }
 
-  // Square grid: Chebyshev.
-  for (let dRow = -rings; dRow <= rings; dRow++) {
-    for (let dCol = -rings; dCol <= rings; dCol++) {
-      const chebyshev = Math.max(Math.abs(dRow), Math.abs(dCol));
-      if (chebyshev > rings) continue;
-      if (exclusionRings > 0 && chebyshev <= exclusionRings) continue;
-      cells.add(`${originCell.i + dRow},${originCell.j + dCol}`);
+  // Square grid: Chebyshev distance from the caster's footprint bounding box.
+  // For a 1x1 origin (normal placement or medium caster) this reduces to the
+  // classic Chebyshev-from-single-cell formula. For larger casters, the AoE
+  // measures reach from the outer edge of the footprint, so a 2x2 creature
+  // with a 20ft circle actually gets 20ft past its own tiles instead of only
+  // 15ft (the "reach eaten by the caster" bug).
+  const footprint = _getFootprintBounds(templateDoc, originCell, gridSize);
+  for (let row = footprint.topRow - rings; row <= footprint.bottomRow + rings; row++) {
+    for (let col = footprint.leftCol - rings; col <= footprint.rightCol + rings; col++) {
+      const cheb = _chebyshevToBounds(row, col, footprint);
+      if (cheb > rings) continue;
+      if (exclusionRings > 0 && cheb <= exclusionRings) continue;
+      cells.add(`${row},${col}`);
     }
   }
   return cells;
+}
+
+/**
+ * Derive the caster's footprint bounding box in cell coordinates from stored
+ * originator flags. Falls back to a 1x1 footprint at the origin cell so
+ * templates without the flag behave exactly as before.
+ */
+function _getFootprintBounds(templateDoc, originCell, gridSize) {
+  const flags = templateDoc.flags?.['souls-d20'];
+  const wCells = Math.max(1, Math.round(flags?.originatorWidth || 1));
+  const hCells = Math.max(1, Math.round(flags?.originatorHeight || 1));
+
+  if (wCells === 1 && hCells === 1) {
+    return {
+      topRow: originCell.i,
+      bottomRow: originCell.i,
+      leftCol: originCell.j,
+      rightCol: originCell.j,
+    };
+  }
+
+  // templateDoc.x/y sits at the caster's center. The footprint's top-left
+  // pixel is one half-footprint offset up and left from that.
+  const topLeftPx = {
+    x: templateDoc.x - (wCells * gridSize) / 2,
+    y: templateDoc.y - (hCells * gridSize) / 2,
+  };
+  const topLeftCell = canvas.grid.getOffset(topLeftPx);
+  return {
+    topRow: topLeftCell.i,
+    bottomRow: topLeftCell.i + hCells - 1,
+    leftCol: topLeftCell.j,
+    rightCol: topLeftCell.j + wCells - 1,
+  };
+}
+
+/**
+ * Chebyshev distance from a cell (row, col) to an axis-aligned bounding box
+ * in cell coordinates. Returns 0 when the cell is inside the box.
+ */
+function _chebyshevToBounds(row, col, bounds) {
+  const rowDist = Math.max(0, bounds.topRow - row, row - bounds.bottomRow);
+  const colDist = Math.max(0, bounds.leftCol - col, col - bounds.rightCol);
+  return Math.max(rowDist, colDist);
 }
 
 /**
@@ -556,10 +629,26 @@ function _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const cosDir = Math.cos(direction);
   const sinDir = Math.sin(direction);
 
+  // Diagonal reach compensation. The projected-Euclidean-distance check below
+  // measures how far along the ray a cell center is in pixels. At a cardinal
+  // direction one grid step = one gridSize of localX, so a 20ft ray reaches 4
+  // cells. At 45deg the same 4 diagonal cells are sqrt(2) * gridSize away in
+  // localX, so a 20ft ray would only reach the 3rd cell without this scale.
+  // Dividing by max(|cos|, |sin|) reaches by the ratio needed for grid-based
+  // (Chebyshev-style) length semantics: 20ft = 4 tiles in any direction.
+  const cardinalScale = Math.max(Math.abs(cosDir), Math.abs(sinDir));
+  const effectiveLengthPx = cardinalScale > 0 ? lengthPx / cardinalScale : lengthPx;
+  const effectiveExclusionPx = cardinalScale > 0 ? exclusionPx / cardinalScale : exclusionPx;
+
   // Bounding-box cell range large enough to contain the whole ray at any
-  // rotation. Use max(length, width) as the half-extent buffer.
+  // rotation. Use max(effectiveLength, width) as the half-extent buffer.
   const originCell = canvas.grid.getOffset({ x: originX, y: originY });
-  const cellSpan = Math.ceil(Math.max(lengthPx, widthPx) / gridSize) + 2;
+  const cellSpan = Math.ceil(Math.max(effectiveLengthPx, widthPx) / gridSize) + 2;
+
+  // Floating-point epsilon so boundary cells at exact multiples of the grid
+  // (e.g. the 4th diagonal cell at 45deg where localX ~= effectiveLengthPx
+  // within 2e-13) get included instead of dropped.
+  const EPS = 1e-6;
 
   for (let dRow = -cellSpan; dRow <= cellSpan; dRow++) {
     for (let dCol = -cellSpan; dCol <= cellSpan; dCol++) {
@@ -571,9 +660,9 @@ function _getLineCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
       // Rotate into local frame where the ray goes down the +x axis.
       const localX = dx * cosDir + dy * sinDir;
       const localY = -dx * sinDir + dy * cosDir;
-      if (localX < 0 || localX > lengthPx) continue;
-      if (Math.abs(localY) > halfWidthPx) continue;
-      if (exclusionPx > 0 && localX < exclusionPx) continue;
+      if (localX < -EPS || localX > effectiveLengthPx + EPS) continue;
+      if (Math.abs(localY) > halfWidthPx + EPS) continue;
+      if (effectiveExclusionPx > 0 && localX < effectiveExclusionPx - EPS) continue;
       cells.add(`${row},${col}`);
     }
   }
@@ -660,10 +749,21 @@ function _getSquareCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
   const cos = Math.cos(angleRad);
   const sin = Math.sin(angleRad);
 
-  // Bounding box big enough to contain the rotated square at any angle. The
-  // rotated square's outer bounding box has half-extent sqrt(2) * halfExtent.
+  // For a large caster with originate-from-self, expand the square's local-
+  // frame half-extents by the caster's footprint half-size so the AoE reaches
+  // halfExtentFt past the caster's outer edge instead of only halfExtentFt
+  // past its center. This uses a per-axis (Minkowski) expansion, which is
+  // exact at rotation 0/90 and an acceptable approximation at other angles.
+  const flags = templateDoc.flags?.['souls-d20'];
+  const wCells = Math.max(1, Math.round(flags?.originatorWidth || 1));
+  const hCells = Math.max(1, Math.round(flags?.originatorHeight || 1));
+  const halfFootprintXPx = ((wCells - 1) * gridSize) / 2;
+  const halfFootprintYPx = ((hCells - 1) * gridSize) / 2;
+  const effectiveHalfXPx = halfExtentPx + halfFootprintXPx;
+  const effectiveHalfYPx = halfExtentPx + halfFootprintYPx;
+
   const originCell = canvas.grid.getOffset({ x: originX, y: originY });
-  const cellSpan = Math.ceil((halfExtentPx * Math.SQRT2) / gridSize) + 1;
+  const cellSpan = Math.ceil((Math.max(effectiveHalfXPx, effectiveHalfYPx) * Math.SQRT2) / gridSize) + 1;
 
   for (let dRow = -cellSpan; dRow <= cellSpan; dRow++) {
     for (let dCol = -cellSpan; dCol <= cellSpan; dCol++) {
@@ -674,8 +774,8 @@ function _getSquareCells(templateDoc, gridSize, gridDistance, exclusionRadius) {
       const dy = center.y - originY;
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
-      if (Math.abs(localX) > halfExtentPx) continue;
-      if (Math.abs(localY) > halfExtentPx) continue;
+      if (Math.abs(localX) > effectiveHalfXPx) continue;
+      if (Math.abs(localY) > effectiveHalfYPx) continue;
       if (exclusionHalfPx > 0
           && Math.abs(localX) < exclusionHalfPx
           && Math.abs(localY) < exclusionHalfPx) {

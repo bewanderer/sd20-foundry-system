@@ -321,7 +321,10 @@ function replaceStatusEffectsPalette(app, html) {
  */
 async function setStatusDuration(actor, statusId, duration, active) {
   if (!actor) return;
-  const conditions = actor.getFlag(MODULE, 'activeConditions') || {};
+  // Clone the read: Foundry returns a live reference from getFlag, so mutating
+  // it in place also mutates the stored flag object; the next setFlag then
+  // sees no diff and silently drops the write.
+  const conditions = foundry.utils.deepClone(actor.getFlag(MODULE, 'activeConditions') || {});
   conditions[statusId] = {
     active: active,
     remainingRounds: active ? duration : null
@@ -332,7 +335,7 @@ async function setStatusDuration(actor, statusId, duration, active) {
   if (!active) {
     const buildupName = CONDITION_TO_BUILDUP[statusId];
     if (buildupName) {
-      const buildup = actor.getFlag(MODULE, 'statusBuildup') || {};
+      const buildup = foundry.utils.deepClone(actor.getFlag(MODULE, 'statusBuildup') || {});
       if (buildup[buildupName]) {
         buildup[buildupName].lastTriggeredRound = -1;
         await actor.setFlag(MODULE, 'statusBuildup', buildup);
@@ -349,7 +352,8 @@ async function toggleStatus(token, statusId, statusType, active) {
   if (!actor) return;
 
   if (statusType === 'condition') {
-    const conditions = actor.getFlag(MODULE, 'activeConditions') || {};
+    // Clone reads so in-place mutation stays on our copy.
+    const conditions = foundry.utils.deepClone(actor.getFlag(MODULE, 'activeConditions') || {});
     if (active) {
       conditions[statusId] = { active: true, remainingRounds: null };
     } else {
@@ -357,7 +361,7 @@ async function toggleStatus(token, statusId, statusType, active) {
       // Reset buildup's lastTriggeredRound so it can accumulate again
       const buildupName = CONDITION_TO_BUILDUP[statusId];
       if (buildupName) {
-        const buildup = actor.getFlag(MODULE, 'statusBuildup') || {};
+        const buildup = foundry.utils.deepClone(actor.getFlag(MODULE, 'statusBuildup') || {});
         if (buildup[buildupName]) {
           buildup[buildupName].lastTriggeredRound = -1;
           await actor.setFlag(MODULE, 'statusBuildup', buildup);
@@ -366,7 +370,7 @@ async function toggleStatus(token, statusId, statusType, active) {
     }
     await actor.setFlag(MODULE, 'activeConditions', conditions);
   } else if (statusType === 'manual') {
-    const manualStatuses = actor.getFlag(MODULE, 'manualStatuses') || {};
+    const manualStatuses = foundry.utils.deepClone(actor.getFlag(MODULE, 'manualStatuses') || {});
     manualStatuses[statusId] = active;
     await actor.setFlag(MODULE, 'manualStatuses', manualStatuses);
   }
