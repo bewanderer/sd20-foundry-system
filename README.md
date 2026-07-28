@@ -74,11 +74,13 @@ Install these from Foundry's built-in module browser.
 2. Create your character (choose background, lineage, allocate stats)
 3. Complete the mandatory Level 1 level-up
 4. Open Foundry and create a world with the Souls D20 system
-5. Create an actor, place a token on the scene
+5. Create an actor (player, not NPC for players), place a token on the scene
 6. Link your character to the token using one of these methods:
-   - Right-click the token > Token Config > SD20 tab > Link to Character
-   - Or click the token and use the chain icon button below the macro bar
-7. Your character data syncs automatically
+   - Click the token and use the chain icon button below the macro bar
+   - You will be prompted to use a pairing code from the Character App (you can find it in the main navigation menu under the option 'Pair with Foundry')
+7. Your character data syncs automatically the first time (if you update your character in the app later and want to sync your changes, click on the token on the grid, below the macro bar will be a 'Sync to Character App' button)
+8. Note for NPCs the process is different, they do not link to the character app but have existing monster presets (still not fully refined, some monster data many not be correct)
+9. You create an NPC actor, open the actor details and click on the preset button (looks like a dragon icon), from there select the monster preset you want to apply to the NPC actor
 
 ## Questions & Feedback
 
